@@ -5,7 +5,7 @@
 
 To SeaQL.org, Inc. ("the Org")
 
-Project: ________ (the "Project")
+Project: SqlAssembly - An embeddable SQL Interpreter (the "Project")
 
 Period: Jun 13, 2022 to Dec 31, 2022 (the "Project Period")
 
