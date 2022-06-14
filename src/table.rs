@@ -1,9 +1,9 @@
 // TODO: break into specific traits?
-trait TableLike {}
+pub trait TableLike {}
 
-struct Table {}
+pub struct Table {}
 
-struct ActiveTable {}
+pub struct ActiveTable {}
 
 #[cfg(test)]
 mod tests {

@@ -1,4 +1,4 @@
-struct Database {
+pub struct Database {
 }
 
 #[cfg(test)]

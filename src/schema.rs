@@ -1,4 +1,4 @@
-struct Schema {}
+pub struct Schema {}
 
 #[cfg(test)]
 mod tests {

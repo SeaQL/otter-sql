@@ -1,3 +1,3 @@
-struct IntermediateCode {}
+pub struct IntermediateCode {}
 
-enum Instruction {}
+pub enum Instruction {}

@@ -1,4 +1,4 @@
-struct VirtualMachine {}
+pub struct VirtualMachine {}
 
 
 #[cfg(test)]
