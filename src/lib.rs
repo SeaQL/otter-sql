@@ -1,9 +1,9 @@
 mod database;
+mod execute;
+mod ic;
 mod schema;
 mod table;
 mod vm;
-mod ic;
-mod execute;
 
 #[cfg(test)]
 mod tests {

@@ -1,21 +1,32 @@
+use std::any::Any;
+
 // TODO: break into specific traits?
 pub trait TableLike {}
 
-pub struct Table {}
+pub struct Table {
+    columns: Vec<Column>,
+}
 
-pub struct ActiveTable {}
+pub struct Column {}
+
+pub struct Row(Vec<Box<dyn Any>>);
+
+pub struct ActiveTable {
+    meta: Table,
+    data: Vec<Row>,
+}
 
 #[cfg(test)]
 mod tests {
-    use super::{Table, ActiveTable};
+    use super::{ActiveTable, Table};
 
     #[test]
     fn create_table() {
-        let _ = Table{};
+        let _ = Table {};
     }
 
     #[test]
     fn create_active_table() {
-        let _ = ActiveTable{};
+        let _ = ActiveTable {};
     }
 }
