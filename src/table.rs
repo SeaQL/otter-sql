@@ -1,32 +1,37 @@
-use std::any::Any;
+use std::{any::Any, borrow::Borrow};
+
+use crate::column::Column;
 
 // TODO: break into specific traits?
 pub trait TableLike {}
 
 pub struct Table {
+    name: String,
     columns: Vec<Column>,
-}
-
-pub struct Column {}
-
-pub struct Row(Vec<Box<dyn Any>>);
-
-pub struct ActiveTable {
-    meta: Table,
     data: Vec<Row>,
 }
 
+impl Table {
+    pub fn new<S>(name: S, columns: Vec<Column>) -> Self
+    where
+        S: Borrow<str>,
+    {
+        Self {
+            name: name.borrow().to_string(),
+            columns,
+            data: Vec::new(),
+        }
+    }
+}
+
+pub struct Row(Vec<Box<dyn Any>>);
+
 #[cfg(test)]
 mod tests {
-    use super::{ActiveTable, Table};
+    use super::Table;
 
     #[test]
     fn create_table() {
-        let _ = Table {};
-    }
-
-    #[test]
-    fn create_active_table() {
-        let _ = ActiveTable {};
+        let _ = Table::new("test", vec![]);
     }
 }
