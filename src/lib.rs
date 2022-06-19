@@ -1,6 +1,5 @@
 mod column;
 mod database;
-mod execute;
 mod ic;
 mod schema;
 mod table;
