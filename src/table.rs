@@ -1,14 +1,14 @@
-use std::{any::Any, borrow::Borrow};
+use std::borrow::Borrow;
 
-use crate::column::Column;
+use crate::column::{Column, ColumnKind};
 
 // TODO: break into specific traits?
 pub trait TableLike {}
 
 pub struct Table {
-    name: String,
-    columns: Vec<Column>,
-    data: Vec<Row>,
+    pub name: String,
+    pub columns: Vec<Column>,
+    pub data: Vec<Row>,
 }
 
 impl Table {
@@ -24,7 +24,9 @@ impl Table {
     }
 }
 
-pub struct Row(Vec<Box<dyn Any>>);
+pub struct Row {
+    pub data: Vec<ColumnKind>,
+}
 
 #[cfg(test)]
 mod tests {

@@ -6,6 +6,9 @@ mod schema;
 mod table;
 mod vm;
 
+pub use database::Database;
+pub use vm::VirtualMachine;
+
 #[cfg(test)]
 mod tests {
     #[test]
