@@ -15,7 +15,7 @@ impl Database {
         S: Borrow<str>,
     {
         Self {
-            name: name.borrow().to_string(),
+            name: name.borrow().to_owned(),
             schemas: vec![Schema::new(DEFAULT_SCHEMA_NAME)],
         }
     }

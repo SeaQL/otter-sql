@@ -17,7 +17,7 @@ impl Table {
         S: Borrow<str>,
     {
         Self {
-            name: name.borrow().to_string(),
+            name: name.borrow().to_owned(),
             columns,
             data: Vec::new(),
         }
