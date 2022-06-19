@@ -1,0 +1,3 @@
+struct IntermediateCode {}
+
+enum Instruction {}
