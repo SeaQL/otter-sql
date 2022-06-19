@@ -2,9 +2,6 @@ use std::borrow::Borrow;
 
 use crate::column::{Column, ColumnKind};
 
-// TODO: break into specific traits?
-pub trait TableLike {}
-
 pub struct Table {
     pub name: String,
     pub columns: Vec<Column>,
