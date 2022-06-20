@@ -10,7 +10,7 @@ pub struct RegisterIndex(usize);
 
 impl RegisterIndex {
     /// Get the next index in the sequence.
-    fn next_index(&self) -> RegisterIndex {
+    pub fn next_index(&self) -> RegisterIndex {
         RegisterIndex(self.0 + 1)
     }
 }
@@ -24,15 +24,15 @@ impl Display for RegisterIndex {
 #[derive(Default)]
 pub struct VirtualMachine {
     registers: HashMap<RegisterIndex, Register>,
-    last_index: RegisterIndex,
 }
 
 impl VirtualMachine {
-    pub fn insert(&mut self, reg: Register) -> RegisterIndex {
-        let index = self.last_index.next_index();
+    pub fn insert(&mut self, index: RegisterIndex, reg: Register) {
         self.registers.insert(index.clone(), reg);
-        self.last_index = index.clone();
-        index
+    }
+
+    pub fn get(&mut self, index: &RegisterIndex) -> Option<&Register> {
+        self.registers.get(index)
     }
 }
 
