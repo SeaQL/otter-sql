@@ -1,11 +1,32 @@
 use sqlparser::ast::ColumnDef;
 
+/// A column's metadata.
 pub struct Column {
-    pub name: String,
-    pub meta: ColumnDef,
-    pub is_primary_key: bool,
+    name_: String,
+    meta_: ColumnDef,
 }
 
+impl Column {
+    pub fn new(name_: String, meta_: ColumnDef) -> Self {
+        Self {
+            name_,
+            meta_,
+        }
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name_
+    }
+
+    // TODO: check if this is really needed
+    pub fn meta(&self) -> &ColumnDef {
+        &self.meta_
+    }
+}
+
+/// A value contained within a table's cell.
+///
+/// One or more column types may be mapped to a single variant of [`Value`].
 pub enum Value {
     // integer types
     // reference: https://dev.mysql.com/doc/refman/8.0/en/integer-types.html
