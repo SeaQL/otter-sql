@@ -1,5 +1,3 @@
-use std::borrow::Borrow;
-
 use crate::schema::Schema;
 
 const DEFAULT_SCHEMA_NAME: &str = "main";
@@ -10,13 +8,11 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn new<S>(name: S) -> Self
-    where
-        S: Borrow<str>,
+    pub fn new(name: String) -> Self
     {
         Self {
-            name: name.borrow().to_owned(),
-            schemas: vec![Schema::new(DEFAULT_SCHEMA_NAME)],
+            name,
+            schemas: vec![Schema::new(DEFAULT_SCHEMA_NAME.to_owned())],
         }
     }
 
@@ -32,6 +28,6 @@ mod tests {
 
     #[test]
     fn create_database() {
-        let _db = Database::new("test");
+        let _db = Database::new("test".to_owned());
     }
 }

@@ -1,5 +1,3 @@
-use std::borrow::Borrow;
-
 use crate::table::Table;
 
 pub struct Schema {
@@ -8,12 +6,10 @@ pub struct Schema {
 }
 
 impl Schema {
-    pub fn new<S>(name: S) -> Self
-    where
-        S: Borrow<str>,
+    pub fn new(name: String) -> Self
     {
         Self {
-            name: name.borrow().to_owned(),
+            name,
             tables: Vec::new(),
         }
     }
@@ -30,6 +26,6 @@ mod tests {
 
     #[test]
     fn create_schema() {
-        let _ = Schema::new("test");
+        let _ = Schema::new("test".to_owned());
     }
 }

@@ -1,5 +1,3 @@
-use std::borrow::Borrow;
-
 use crate::column::{Column, ColumnKind};
 
 pub struct Table {
@@ -9,12 +7,10 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn new<S>(name: S, columns: Vec<Column>) -> Self
-    where
-        S: Borrow<str>,
+    pub fn new(name: String, columns: Vec<Column>) -> Self
     {
         Self {
-            name: name.borrow().to_owned(),
+            name,
             columns,
             data: Vec::new(),
         }
@@ -31,6 +27,6 @@ mod tests {
 
     #[test]
     fn create_table() {
-        let _ = Table::new("test", vec![]);
+        let _ = Table::new("test".to_owned(), vec![]);
     }
 }
