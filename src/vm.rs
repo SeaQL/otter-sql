@@ -2,16 +2,9 @@ use std::{rc::Rc, collections::HashMap};
 
 use crate::{table::Table, ic::IntermediateCode};
 
+#[derive(Default)]
 pub struct VirtualMachine {
     pub registers: HashMap<usize, Register>,
-}
-
-impl Default for VirtualMachine {
-    fn default() -> Self {
-        VirtualMachine {
-            registers: HashMap::new(),
-        }
-    }
 }
 
 impl VirtualMachine {
