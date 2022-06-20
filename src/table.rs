@@ -1,4 +1,4 @@
-use crate::column::{Column, ColumnKind};
+use crate::column::{Column, Value};
 
 pub struct Table {
     pub name: String,
@@ -18,7 +18,7 @@ impl Table {
 }
 
 pub struct Row {
-    pub data: Vec<ColumnKind>,
+    pub data: Vec<Value>,
 }
 
 #[cfg(test)]
