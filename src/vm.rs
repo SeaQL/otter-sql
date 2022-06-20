@@ -1,6 +1,7 @@
-use std::{rc::Rc, collections::HashMap};
+use std::collections::HashMap;
 
-use crate::{table::Table, ic::IntermediateCode};
+use crate::Mrc;
+use crate::{ic::IntermediateCode, table::Table};
 
 #[derive(Default)]
 pub struct VirtualMachine {
@@ -15,12 +16,12 @@ impl VirtualMachine {
 }
 
 pub enum Register {
-    Table(Rc<Table>),
+    Table(Mrc<Table>),
     Filter(Filter),
 }
 
 pub struct Filter {
-    pub table: Rc<Table>,
+    pub table: Mrc<Table>,
     // TODO: representation of filter - take from AST
 }
 

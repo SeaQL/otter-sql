@@ -7,3 +7,6 @@ edition = "2021"
 
 [dependencies]
 sqlparser = "0.18.0"
+
+[features]
+thread-safe = []
