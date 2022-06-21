@@ -1,8 +1,8 @@
 use crate::table::Table;
 
 pub struct Schema {
-    pub name: String,
-    pub tables: Vec<Table>,
+    name: String,
+    tables: Vec<Table>,
 }
 
 impl Schema {
@@ -12,6 +12,14 @@ impl Schema {
             name,
             tables: Vec::new(),
         }
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+
+    pub fn tables(&self) -> &Vec<Table> {
+        &self.tables
     }
 
     pub fn with_table(mut self, table: Table) -> Self {

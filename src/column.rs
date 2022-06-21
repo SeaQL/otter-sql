@@ -2,25 +2,25 @@ use sqlparser::ast::ColumnDef;
 
 /// A column's metadata.
 pub struct Column {
-    name_: String,
-    meta_: ColumnDef,
+    name: String,
+    meta: ColumnDef,
 }
 
 impl Column {
-    pub fn new(name_: String, meta_: ColumnDef) -> Self {
+    pub fn new(name: String, meta: ColumnDef) -> Self {
         Self {
-            name_,
-            meta_,
+            name,
+            meta,
         }
     }
 
     pub fn name(&self) -> &String {
-        &self.name_
+        &self.name
     }
 
     // TODO: check if this is really needed
     pub fn meta(&self) -> &ColumnDef {
-        &self.meta_
+        &self.meta
     }
 }
 

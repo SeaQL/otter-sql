@@ -3,30 +3,30 @@ use crate::schema::Schema;
 const DEFAULT_SCHEMA_NAME: &str = "main";
 
 pub struct Database {
-    name_: String,
-    schemas_: Vec<Schema>,
+    name: String,
+    schemas: Vec<Schema>,
 }
 
 impl Database {
-    pub fn new(name_: String) -> Self
+    pub fn new(name: String) -> Self
     {
         Self {
-            name_,
-            schemas_: vec![Schema::new(DEFAULT_SCHEMA_NAME.to_owned())],
+            name,
+            schemas: vec![Schema::new(DEFAULT_SCHEMA_NAME.to_owned())],
         }
     }
 
     pub fn with_schema(mut self, schema: Schema) -> Self {
-        self.schemas_.push(schema);
+        self.schemas.push(schema);
         self
     }
 
     pub fn name(&self) -> &String {
-        &self.name_
+        &self.name
     }
 
     pub fn schemas(&self) -> &Vec<Schema> {
-        &self.schemas_
+        &self.schemas
     }
 }
 
