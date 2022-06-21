@@ -1,3 +1,5 @@
-struct IntermediateCode {}
+pub struct IntermediateCode {
+    pub instrs: Vec<Instruction>,
+}
 
-enum Instruction {}
+pub enum Instruction {}

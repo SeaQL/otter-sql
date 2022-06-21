@@ -1,21 +1,45 @@
-// TODO: break into specific traits?
-trait TableLike {}
+use crate::column::{Column, Value};
 
-struct Table {}
+pub struct Table {
+    name: String,
+    columns: Vec<Column>,
+    pub data: Vec<Row>,
+}
 
-struct ActiveTable {}
+impl Table {
+    pub fn new(name: String, columns: Vec<Column>) -> Self
+    {
+        Self {
+            name,
+            columns,
+            data: Vec::new(),
+        }
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+
+    pub fn columns(&self) -> &Vec<Column> {
+        &self.columns
+    }
+
+    pub fn with_column(mut self, column: Column) -> Self {
+        self.columns.push(column);
+        self
+    }
+}
+
+pub struct Row {
+    pub data: Vec<Value>,
+}
 
 #[cfg(test)]
 mod tests {
-    use super::{Table, ActiveTable};
+    use super::Table;
 
     #[test]
     fn create_table() {
-        let _ = Table{};
-    }
-
-    #[test]
-    fn create_active_table() {
-        let _ = ActiveTable{};
+        let _ = Table::new("test".to_owned(), vec![]);
     }
 }
