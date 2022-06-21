@@ -34,9 +34,7 @@ impl VirtualMachine {
     pub fn get(&mut self, index: &RegisterIndex) -> Option<&Register> {
         self.registers.get(index)
     }
-}
 
-impl VirtualMachine {
     pub fn execute(&mut self, _code: &IntermediateCode) {
         // TODO
         todo!();
