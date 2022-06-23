@@ -1,4 +1,4 @@
-use crate::column::{Column, Value};
+use crate::{column::Column, value::Value};
 
 pub struct Table {
     name: String,

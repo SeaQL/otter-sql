@@ -3,6 +3,7 @@ mod database;
 mod ic;
 mod schema;
 mod table;
+mod value;
 mod vm;
 
 pub use database::Database;
