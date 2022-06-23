@@ -1,6 +1,7 @@
 /// A value contained within a table's cell.
 ///
 /// One or more column types may be mapped to a single variant of [`Value`].
+#[derive(Debug, PartialEq)]
 pub enum Value {
     Null,
 
@@ -38,4 +39,16 @@ pub enum Value {
     String(String),
 
     Binary(Vec<u8>),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Value;
+
+    #[test]
+    fn create_value() {
+        let value = Value::Null;
+        assert_eq!(value, Value::Null);
+        assert!(value != Value::String("test".to_owned()));
+    }
 }
