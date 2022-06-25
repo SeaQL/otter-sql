@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 
+use sqlparser::ast::Value;
+
+use crate::column::Column;
 use crate::Mrc;
 use crate::{ic::IntermediateCode, table::Table};
 
@@ -48,15 +51,82 @@ impl VirtualMachine {
 /// A register in the executor VM.
 pub enum Register {
     /// A view into a table.
-    View(Mrc<Table>),
-    /// Filters applied over a table.
-    Filter(Filter),
+    View(View),
+    /// An SQL value
+    Value(Value),
+    /// A column definition
+    Column(Column),
+    /// An insert statement
+    InsertDef(InsertDef),
+    /// A row to insert
+    InsertRow(InsertRow),
 }
 
-/// A view into a table with filters applied to it.
-pub struct Filter {
-    pub table: Mrc<Table>,
-    // TODO: representation of filter - take from AST
+/// An abstract definition of an insert statement.
+pub struct InsertDef {
+    /// The view to insert into
+    pub view: Mrc<View>,
+    /// The columns to insert into.
+    ///
+    /// Empty means all columns.
+    pub columns: Vec<Column>,
+    /// The values to insert.
+    pub rows: Vec<InsertRow>,
+}
+
+impl InsertDef {
+    pub fn new(view: Mrc<View>) -> Self {
+        Self {
+            view,
+            columns: Vec::new(),
+            rows: Vec::new(),
+        }
+    }
+}
+
+/// A row of values to insert.
+pub struct InsertRow {
+    /// The values
+    pub values: Vec<Value>,
+    /// The insert definition which this belongs to
+    pub def: Mrc<InsertDef>,
+}
+
+/// A mutable "view" into a table.
+///
+/// Filters, projections and ordering may be applied to the view.
+///
+/// Note: not related to views of queries that some databases support.
+pub struct View {
+    table: Mrc<Table>,
+    // TODO: type for filters. usize is a placeholder.
+    filters: Vec<usize>,
+    // TODO: type for projections. usize is a placeholder.
+    projections: Vec<usize>,
+    // TODO: type for ordering. usize is a placeholder.
+    orderings: Vec<usize>,
+}
+
+impl View {
+    /// Creates a new view into the given table.
+    pub fn new(table: Mrc<Table>) -> Self {
+        View {
+            table,
+            filters: Vec::new(),
+            projections: Vec::new(),
+            orderings: Vec::new(),
+        }
+    }
+
+    /// Returns the final data after applying all operations.
+    pub fn get_data(&self) -> Table {
+        // TODO: implement fn and remove placeholders
+        let _ = &self.table;
+        let _ = &self.filters;
+        let _ = &self.projections;
+        let _ = &self.orderings;
+        todo!()
+    }
 }
 
 #[cfg(test)]
