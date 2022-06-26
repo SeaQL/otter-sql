@@ -21,31 +21,39 @@ impl Display for RegisterIndex {
     }
 }
 
+/// Executor of an SQL query.
 #[derive(Default)]
 pub struct VirtualMachine {
     registers: HashMap<RegisterIndex, Register>,
 }
 
 impl VirtualMachine {
+    /// Inserts a value for the register at the given index.
     pub fn insert(&mut self, index: RegisterIndex, reg: Register) {
         self.registers.insert(index.clone(), reg);
     }
 
+    /// Gets the value for the register at the given index.
     pub fn get(&mut self, index: &RegisterIndex) -> Option<&Register> {
         self.registers.get(index)
     }
 
+    /// Executes the given intermediate code.
     pub fn execute(&mut self, _code: &IntermediateCode) {
         // TODO
         todo!();
     }
 }
 
+/// A register in the executor VM.
 pub enum Register {
-    Table(Mrc<Table>),
+    /// A view into a table.
+    View(Mrc<Table>),
+    /// Filters applied over a table.
     Filter(Filter),
 }
 
+/// A view into a table with filters applied to it.
 pub struct Filter {
     pub table: Mrc<Table>,
     // TODO: representation of filter - take from AST
