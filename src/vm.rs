@@ -54,12 +54,20 @@ pub enum Register {
     View(View),
     /// An SQL value
     Value(Value),
+    /// A table definition.
+    TableDef(TableDef),
     /// A column definition
     Column(Column),
     /// An insert statement
     InsertDef(InsertDef),
     /// A row to insert
     InsertRow(InsertRow),
+}
+
+/// An abstract definition of a create table statement.
+pub struct TableDef {
+    pub name: String,
+    pub columns: Vec<Column>,
 }
 
 /// An abstract definition of an insert statement.
