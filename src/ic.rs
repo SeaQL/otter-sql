@@ -114,7 +114,7 @@ pub enum Instruction {
         col_index: RegisterIndex,
     },
 
-    /// Creates table from the [`Register::TableDef`](`crate::vm::Register::TableDef`) in register `index`.
+    /// Create table from the [`Register::TableDef`](`crate::vm::Register::TableDef`) in register `index`.
     ///
     /// This represents a `CREATE TABLE [IF NOT EXISTS]` statement.
     NewTable {
@@ -123,7 +123,7 @@ pub enum Instruction {
         exists_ok: bool,
     },
 
-    /// Removes the given column from the [`Register::View`](`crate::vm::Register::View`) in register `index`.
+    /// Remove the given column from the [`Register::View`](`crate::vm::Register::View`) in register `index`.
     RemoveColumn {
         index: RegisterIndex,
         col_name: String,
@@ -134,5 +134,52 @@ pub enum Instruction {
         index: RegisterIndex,
         old_name: String,
         new_name: String,
+    },
+
+    /// Start a new insertion into the [`Register::View`](`crate::vm::Register::View`) in register `view_index`.
+    ///
+    /// A [`Register::InsertDef`](`crate::vm::Register::InsertDef`) is stored in register `index`.
+    InsertDef {
+        view_index: RegisterIndex,
+        index: RegisterIndex,
+    },
+
+    /// Add a column to the [`Register::InsertDef`](`crate::vm::Register::InsertDef`) in register `index`.
+    Column {
+        index: RegisterIndex,
+        col_name: String,
+    },
+
+    /// Start defining a new row of data to be inserted into the [`Register::InsertDef`](`crate::vm::Register::InsertDef`) in register `insert_index`.
+    ///
+    /// The value stored in the register `index` will be of type [`Register::InsertRow`](`crate::vm::Register::InsertRow`).
+    RowDef {
+        insert_index: RegisterIndex,
+        index: RegisterIndex,
+    },
+
+    /// Add a value to the [`Register::InsertRow`](`crate::vm::Register::InsertRow`) in register `index`.
+    AddValue {
+        index: RegisterIndex,
+        value: Value,
+    },
+
+    /// Perform insertion defined in the [`Register::InsertRow`](`crate::vm::Register::InsertRow`) in register `index`.
+    ///
+    /// This represents an `INSERT INTO` statement.
+    Insert {
+        index: RegisterIndex,
+    },
+
+
+    /// Update values of the [`Register::View`](`crate::vm::Register::View`) in register `index`.
+    ///
+    /// The `col_name` column's value is set to `value` for all rows.
+    ///
+    /// This represents an `UPDATE` statement.
+    Update {
+        index: RegisterIndex,
+        col_name: String,
+        value: Value,
     },
 }
