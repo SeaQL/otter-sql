@@ -40,6 +40,38 @@ pub enum Instruction {
         col_name: String,
     },
 
+    /// Add a projection of a single column with an aggregation to the [`Register::View`](`crate::vm::Register::View`) in register `index`.
+    ///
+    /// This must only be used with a statement that has a `GROUP BY` clause. Additionally, this
+    /// column must not appear in the `GROUP BY` clause.
+    ProjectAggregate {
+        index: RegisterIndex,
+        // TODO: placeholder type!
+        aggregation: u32,
+        col_name: String,
+    },
+
+    /// Add a grouping on a single column to the [`Register::View`](`crate::vm::Register::View`) in register `index`.
+    ///
+    /// Must be added before any projections so as to catch errors in column selections.
+    GroupBy {
+        index: RegisterIndex,
+        col_name: String,
+    },
+
+    /// Add a post grouping filter on a single column to the [`Register::View`](`crate::vm::Register::View`) in register `index`.
+    ///
+    /// This must only be used with a statement that has a `GROUP BY` clause.
+    Having {
+        index: RegisterIndex,
+        // TODO: placeholder type!
+        aggregation: Option<u32>,
+        col_name: String,
+        // TODO: placeholder type!
+        operator: u32,
+        value: Value,
+    },
+
     /// Add an ordering for a single column on the [`Register::View`](`crate::vm::Register::View`) in register `index`.
     ///
     /// This represents the `ORDER BY` clause in SQL.

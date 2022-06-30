@@ -111,9 +111,14 @@ pub struct View {
     // TODO: type for filters. usize is a placeholder.
     filters: Vec<usize>,
     // TODO: type for projections. usize is a placeholder.
+    // TODO: must support aggregation projections too.
     projections: Vec<usize>,
     // TODO: type for ordering. usize is a placeholder.
     orderings: Vec<usize>,
+    // TODO: type for group by. usize is a placeholder.
+    group_bys: Vec<usize>,
+    // TODO: type for having. usize is a placeholder.
+    havings: Vec<usize>,
 }
 
 impl View {
@@ -124,6 +129,8 @@ impl View {
             filters: Vec::new(),
             projections: Vec::new(),
             orderings: Vec::new(),
+            group_bys: Vec::new(),
+            havings: Vec::new(),
         }
     }
 
@@ -134,6 +141,8 @@ impl View {
         let _ = &self.filters;
         let _ = &self.projections;
         let _ = &self.orderings;
+        let _ = &self.group_bys;
+        let _ = &self.havings;
         todo!()
     }
 }
