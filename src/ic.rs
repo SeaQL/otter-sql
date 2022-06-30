@@ -182,4 +182,35 @@ pub enum Instruction {
         col_name: String,
         value: Value,
     },
+
+    /// Perform a union of the [`Register::View`](`crate::vm::Register::View`) in register `input1` and the [`Register::View`](`crate::vm::Register::View`) in register `input2`.
+    ///
+    /// The output is stored as a [`Register::View`](`crate::vm::Register::View`) in register
+    /// `output`.
+    Union {
+        input1: RegisterIndex,
+        input2: RegisterIndex,
+        output: RegisterIndex,
+    },
+
+    /// Perform a cartesian join of the [`Register::View`](`crate::vm::Register::View`) in register `input1` and the [`Register::View`](`crate::vm::Register::View`) in register `input2`.
+    ///
+    /// The output is stored as a [`Register::View`](`crate::vm::Register::View`) in register `output`.
+    CrossJoin {
+        input1: RegisterIndex,
+        input2: RegisterIndex,
+        output: RegisterIndex,
+    },
+
+    /// Perform a natural join of the [`Register::View`](`crate::vm::Register::View`) in register `input1` and the [`Register::View`](`crate::vm::Register::View`) in register `input2`.
+    ///
+    /// The output is stored as a [`Register::View`](`crate::vm::Register::View`) in register `output`.
+    ///
+    /// Note: this is both a left and a right join i.e., there will be `NULL`s where the common
+    /// columns do not match. The result must be filtered at a later stage.
+    NaturalJoin {
+        input1: RegisterIndex,
+        input2: RegisterIndex,
+        output: RegisterIndex,
+    },
 }

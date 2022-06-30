@@ -62,6 +62,7 @@ pub enum Register {
     InsertDef(InsertDef),
     /// A row to insert
     InsertRow(InsertRow),
+    // TODO: an error value?
 }
 
 /// An abstract definition of a create table statement.
