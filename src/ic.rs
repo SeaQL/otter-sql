@@ -1,6 +1,6 @@
-use sqlparser::ast::{DataType, ColumnOptionDef};
+use sqlparser::ast::{ColumnOptionDef, DataType};
 
-use crate::{vm::RegisterIndex, value::Value};
+use crate::{value::Value, vm::RegisterIndex};
 
 /// The intermediate representation of a query.
 pub struct IntermediateCode {
@@ -13,10 +13,7 @@ pub enum Instruction {
     ///
     /// The table given by `name` is loaded into the view.
     // TODO: should the table exist already or do we allow making new temporary views?
-    View {
-        index: RegisterIndex,
-        name: String,
-    },
+    View { index: RegisterIndex, name: String },
 
     /// Add a filter over single column on the [`Register::View`](`crate::vm::Register::View`) in register `index`.
     ///
@@ -84,18 +81,13 @@ pub enum Instruction {
     /// Add a row limit for the [`Register::View`](`crate::vm::Register::View`) in register `index`.
     ///
     /// This represents the `LIMIT` clause in SQL.
-    Limit {
-        index: RegisterIndex,
-        limit: u64,
-    },
+    Limit { index: RegisterIndex, limit: u64 },
 
     /// Return from register at `index`.
     ///
     /// Some values stored in a register may be intermediate values and cannot be returned.
     /// See [`Register`](`crate::vm::Register`) for more information.
-    Return {
-        index: RegisterIndex,
-    },
+    Return { index: RegisterIndex },
 
     /// Create a new database.
     ///
@@ -109,9 +101,7 @@ pub enum Instruction {
     /// Create a new schema.
     ///
     /// This represents a `CREATE SCHEMA [IF NOT EXISTS]` statement.
-    NewSchema {
-        name: String,
-    },
+    NewSchema { name: String },
 
     /// Start defining a new table and store the temporary metadata in register `index`.
     ///
@@ -191,18 +181,12 @@ pub enum Instruction {
     },
 
     /// Add a value to the [`Register::InsertRow`](`crate::vm::Register::InsertRow`) in register `index`.
-    AddValue {
-        index: RegisterIndex,
-        value: Value,
-    },
+    AddValue { index: RegisterIndex, value: Value },
 
     /// Perform insertion defined in the [`Register::InsertRow`](`crate::vm::Register::InsertRow`) in register `index`.
     ///
     /// This represents an `INSERT INTO` statement.
-    Insert {
-        index: RegisterIndex,
-    },
-
+    Insert { index: RegisterIndex },
 
     /// Update values of the [`Register::View`](`crate::vm::Register::View`) in register `index`.
     ///
