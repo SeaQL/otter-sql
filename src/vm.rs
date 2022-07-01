@@ -8,7 +8,7 @@ use crate::Mrc;
 use crate::{ic::IntermediateCode, table::Table};
 
 /// An index that can be used to access a specific register.
-#[derive(Default, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct RegisterIndex(usize);
 
 impl RegisterIndex {

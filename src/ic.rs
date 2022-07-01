@@ -1,6 +1,6 @@
 use sqlparser::ast::{ColumnOptionDef, DataType};
 
-use crate::{value::Value, vm::RegisterIndex};
+use crate::{vm::RegisterIndex, value::Value, BoundedString};
 
 /// The intermediate representation of a query.
 pub struct IntermediateCode {
@@ -8,12 +8,16 @@ pub struct IntermediateCode {
 }
 
 /// The instruction set.
+#[derive(Debug, Clone)]
 pub enum Instruction {
     /// Make a new [`Register::View`](`crate::vm::Register::View`) of a table into register `index`.
     ///
     /// The table given by `name` is loaded into the view.
     // TODO: should the table exist already or do we allow making new temporary views?
-    View { index: RegisterIndex, name: String },
+    View {
+        index: RegisterIndex,
+        name: BoundedString,
+    },
 
     /// Add a filter over single column on the [`Register::View`](`crate::vm::Register::View`) in register `index`.
     ///
@@ -22,7 +26,7 @@ pub enum Instruction {
     /// This represents a `WHERE` clause in SQL.
     Filter {
         index: RegisterIndex,
-        col_name: String,
+        col_name: BoundedString,
         // TODO: placeholder type!
         operator: u32,
         value: Value,
@@ -34,7 +38,7 @@ pub enum Instruction {
     /// projections given, all columns are considered/returned.
     Project {
         index: RegisterIndex,
-        col_name: String,
+        col_name: BoundedString,
     },
 
     /// Add a projection of a single column with an aggregation to the [`Register::View`](`crate::vm::Register::View`) in register `index`.
@@ -45,7 +49,7 @@ pub enum Instruction {
         index: RegisterIndex,
         // TODO: placeholder type!
         aggregation: u32,
-        col_name: String,
+        col_name: BoundedString,
     },
 
     /// Add a grouping on a single column to the [`Register::View`](`crate::vm::Register::View`) in register `index`.
@@ -53,7 +57,7 @@ pub enum Instruction {
     /// Must be added before any projections so as to catch errors in column selections.
     GroupBy {
         index: RegisterIndex,
-        col_name: String,
+        col_name: BoundedString,
     },
 
     /// Add a post grouping filter on a single column to the [`Register::View`](`crate::vm::Register::View`) in register `index`.
@@ -63,7 +67,7 @@ pub enum Instruction {
         index: RegisterIndex,
         // TODO: placeholder type!
         aggregation: Option<u32>,
-        col_name: String,
+        col_name: BoundedString,
         // TODO: placeholder type!
         operator: u32,
         value: Value,
@@ -74,7 +78,7 @@ pub enum Instruction {
     /// This represents the `ORDER BY` clause in SQL.
     Order {
         index: RegisterIndex,
-        col_name: String,
+        col_name: BoundedString,
         ascending: bool,
     },
 
@@ -93,7 +97,7 @@ pub enum Instruction {
     ///
     /// This represents a `CREATE DATABASE [IF NOT EXISTS]` statement.
     NewDatabase {
-        name: String,
+        name: BoundedString,
         /// If `true`, the database is not created if it exists and no error is returned.
         exists_ok: bool,
     },
@@ -102,7 +106,7 @@ pub enum Instruction {
     ///
     /// This represents a `CREATE SCHEMA [IF NOT EXISTS]` statement.
     NewSchema {
-        name: String,
+        name: BoundedString,
         /// If `true`, the schema is not created if it exists and no error is returned.
         exists_ok: bool,
     },
@@ -113,7 +117,7 @@ pub enum Instruction {
     TableDef {
         index: RegisterIndex,
         /// The table name.
-        name: String,
+        name: BoundedString,
     },
 
     /// Start defining a  new column and store the temporary metadata in register `index`.
@@ -122,7 +126,7 @@ pub enum Instruction {
     ColumnDef {
         index: RegisterIndex,
         /// The column name.
-        name: String,
+        name: BoundedString,
         data_type: DataType,
     },
 
@@ -152,14 +156,14 @@ pub enum Instruction {
     /// Remove the given column from the [`Register::View`](`crate::vm::Register::View`) in register `index`.
     RemoveColumn {
         index: RegisterIndex,
-        col_name: String,
+        col_name: BoundedString,
     },
 
     /// Rename an existing column from the [`Register::View`](`crate::vm::Register::View`) in register `index`.
     RenameColumn {
         index: RegisterIndex,
-        old_name: String,
-        new_name: String,
+        old_name: BoundedString,
+        new_name: BoundedString,
     },
 
     /// Start a new insertion into the [`Register::View`](`crate::vm::Register::View`) in register `view_index`.
@@ -173,7 +177,7 @@ pub enum Instruction {
     /// Add a column to the [`Register::InsertDef`](`crate::vm::Register::InsertDef`) in register `index`.
     Column {
         index: RegisterIndex,
-        col_name: String,
+        col_name: BoundedString,
     },
 
     /// Start defining a new row of data to be inserted into the [`Register::InsertDef`](`crate::vm::Register::InsertDef`) in register `insert_index`.
@@ -199,7 +203,7 @@ pub enum Instruction {
     /// This represents an `UPDATE` statement.
     Update {
         index: RegisterIndex,
-        col_name: String,
+        col_name: BoundedString,
         // TODO: support expressions instead of just values.
         value: Value,
     },
@@ -253,7 +257,7 @@ mod test {
             instrs: vec![
                 View {
                     index: view_index,
-                    name: "table".to_owned(),
+                    name: "table".into(),
                 },
                 Return { index: view_index },
             ],
@@ -265,11 +269,11 @@ mod test {
             instrs: vec![
                 View {
                     index: view_index,
-                    name: "table".to_owned(),
+                    name: "table".into(),
                 },
                 Filter {
                     index: view_index,
-                    col_name: "col1".to_owned(),
+                    col_name: "col1".into(),
                     operator: 0,
                     // NOTE: All numbers from the AST will be assumed to be Int64.
                     // They can be downcasted later if needed.
@@ -285,21 +289,21 @@ mod test {
             instrs: vec![
                 View {
                     index: view_index,
-                    name: "table".to_owned(),
+                    name: "table".into(),
                 },
                 Filter {
                     index: view_index,
-                    col_name: "col1".to_owned(),
+                    col_name: "col1".into(),
                     operator: 0,
                     value: Value::Int64(1),
                 },
                 Project {
                     index: view_index,
-                    col_name: "col2".to_owned(),
+                    col_name: "col2".into(),
                 },
                 Project {
                     index: view_index,
-                    col_name: "col3".to_owned(),
+                    col_name: "col3".into(),
                 },
                 Return { index: view_index },
             ],
@@ -311,26 +315,26 @@ mod test {
             instrs: vec![
                 View {
                     index: view_index,
-                    name: "table".to_owned(),
+                    name: "table".into(),
                 },
                 Filter {
                     index: view_index,
-                    col_name: "col1".to_owned(),
+                    col_name: "col1".into(),
                     // TODO: placeholder type
                     operator: 0,
                     value: Value::Int64(1),
                 },
                 Project {
                     index: view_index,
-                    col_name: "col2".to_owned(),
+                    col_name: "col2".into(),
                 },
                 Project {
                     index: view_index,
-                    col_name: "col3".to_owned(),
+                    col_name: "col3".into(),
                 },
                 Order {
                     index: view_index,
-                    col_name: "col2".to_owned(),
+                    col_name: "col2".into(),
                     ascending: true,
                 },
                 Limit {
@@ -347,33 +351,33 @@ mod test {
             instrs: vec![
                 View {
                     index: view_index,
-                    name: "table".to_owned(),
+                    name: "table".into(),
                 },
                 Filter {
                     index: view_index,
-                    col_name: "col1".to_owned(),
+                    col_name: "col1".into(),
                     operator: 0,
                     value: Value::Int64(1),
                 },
                 GroupBy {
                     index: view_index,
-                    col_name: "col2".to_owned(),
+                    col_name: "col2".into(),
                 },
                 Project {
                     index: view_index,
-                    col_name: "col2".to_owned(),
+                    col_name: "col2".into(),
                 },
                 ProjectAggregate {
                     index: view_index,
                     // TODO: placeholder type
                     aggregation: 0,
-                    col_name: "col3".to_owned(),
+                    col_name: "col3".into(),
                 },
                 Having {
                     index: view_index,
                     // TODO: placeholder type
                     aggregation: Some(0),
-                    col_name: "col3".to_owned(),
+                    col_name: "col3".into(),
                     // TODO: placeholder type
                     operator: 1,
                     value: Value::Int64(10),
@@ -388,17 +392,17 @@ mod test {
             instrs: vec![
                 View {
                     index: view_index,
-                    name: "table".to_owned(),
+                    name: "table".into(),
                 },
                 Filter {
                     index: view_index,
-                    col_name: "col1".to_owned(),
+                    col_name: "col1".into(),
                     operator: 0,
                     value: Value::Int64(1),
                 },
                 Filter {
                     index: view_index,
-                    col_name: "col2".to_owned(),
+                    col_name: "col2".into(),
                     operator: 0,
                     value: Value::Int64(2),
                 },
@@ -414,21 +418,21 @@ mod test {
             instrs: vec![
                 View {
                     index: view_index_1,
-                    name: "table".to_owned(),
+                    name: "table".into(),
                 },
                 Filter {
                     index: view_index_1,
-                    col_name: "col1".to_owned(),
+                    col_name: "col1".into(),
                     operator: 1,
                     value: Value::Int64(1),
                 },
                 View {
                     index: view_index_2,
-                    name: "table".to_owned(),
+                    name: "table".into(),
                 },
                 Filter {
                     index: view_index_2,
-                    col_name: "col2".to_owned(),
+                    col_name: "col2".into(),
                     operator: 0,
                     value: Value::Int64(2),
                 },
@@ -449,7 +453,7 @@ mod test {
         // `CREATE DATABASE db1`
         let _ = IntermediateCode {
             instrs: vec![NewDatabase {
-                name: "db1".to_owned(),
+                name: "db1".into(),
                 exists_ok: false,
             }],
         };
@@ -457,7 +461,7 @@ mod test {
         // `CREATE SCHEMA schema1`
         let _ = IntermediateCode {
             instrs: vec![NewSchema {
-                name: "schema1".to_owned(),
+                name: "schema1".into(),
                 exists_ok: false,
             }],
         };
@@ -469,11 +473,11 @@ mod test {
             instrs: vec![
                 TableDef {
                     index: table_index,
-                    name: "table1".to_owned(),
+                    name: "table1".into(),
                 },
                 ColumnDef {
                     index: col_index,
-                    name: "col1".to_owned(),
+                    name: "col1".into(),
                     data_type: DataType::Int(None),
                 },
                 AddColumnOption {
@@ -496,7 +500,7 @@ mod test {
                 },
                 ColumnDef {
                     index: col_index,
-                    name: "col2".to_owned(),
+                    name: "col2".into(),
                     data_type: DataType::String,
                 },
                 AddColumnOption {
@@ -512,7 +516,7 @@ mod test {
                 },
                 ColumnDef {
                     index: col_index,
-                    name: "col3".to_owned(),
+                    name: "col3".into(),
                     data_type: DataType::Int(None),
                 },
                 AddColumnOption {
@@ -543,11 +547,11 @@ mod test {
             instrs: vec![
                 View {
                     index: table_index,
-                    name: "table1".to_owned(),
+                    name: "table1".into(),
                 },
                 ColumnDef {
                     index: col_index,
-                    name: "col4".to_owned(),
+                    name: "col4".into(),
                     data_type: DataType::String,
                 },
                 AddColumnOption {
@@ -570,12 +574,12 @@ mod test {
             instrs: vec![
                 View {
                     index: table_index,
-                    name: "table1".to_owned(),
+                    name: "table1".into(),
                 },
                 RenameColumn {
                     index: table_index,
-                    old_name: "col4".to_owned(),
-                    new_name: "col5".to_owned(),
+                    old_name: "col4".into(),
+                    new_name: "col5".into(),
                 },
             ],
         };
@@ -586,11 +590,11 @@ mod test {
             instrs: vec![
                 View {
                     index: table_index,
-                    name: "table1".to_owned(),
+                    name: "table1".into(),
                 },
                 RemoveColumn {
                     index: table_index,
-                    col_name: "col5".to_owned(),
+                    col_name: "col5".into(),
                 },
             ],
         };

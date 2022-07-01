@@ -1,7 +1,7 @@
 /// A value contained within a table's cell.
 ///
 /// One or more column types may be mapped to a single variant of [`Value`].
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Value {
     Null,
 
