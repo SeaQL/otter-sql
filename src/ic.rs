@@ -101,7 +101,11 @@ pub enum Instruction {
     /// Create a new schema.
     ///
     /// This represents a `CREATE SCHEMA [IF NOT EXISTS]` statement.
-    NewSchema { name: String },
+    NewSchema {
+        name: String,
+        /// If `true`, the schema is not created if it exists and no error is returned.
+        exists_ok: bool,
+    },
 
     /// Start defining a new table and store the temporary metadata in register `index`.
     ///
@@ -123,7 +127,7 @@ pub enum Instruction {
     },
 
     /// Add an option or constraint to the [`Column`](`crate::vm::Register::Column`) definition in register `index`.
-    ColumnOption {
+    AddColumnOption {
         index: RegisterIndex,
         option: ColumnOptionDef,
     },
@@ -196,6 +200,7 @@ pub enum Instruction {
     Update {
         index: RegisterIndex,
         col_name: String,
+        // TODO: support expressions instead of just values.
         value: Value,
     },
 
@@ -229,4 +234,398 @@ pub enum Instruction {
         input2: RegisterIndex,
         output: RegisterIndex,
     },
+}
+
+#[cfg(test)]
+mod test {
+    use sqlparser::ast::{ColumnOption, ColumnOptionDef, DataType};
+
+    use crate::{value::Value, vm::RegisterIndex};
+
+    use super::{Instruction::*, IntermediateCode};
+
+    // TODO: placeholder tests. Test actual AST -> IC conversion once that is implemented.
+    #[test]
+    fn select_statements() {
+        // `SELECT * FROM table`
+        let view_index = RegisterIndex::default();
+        let _ = IntermediateCode {
+            instrs: vec![
+                View {
+                    index: view_index,
+                    name: "table".to_owned(),
+                },
+                Return { index: view_index },
+            ],
+        };
+
+        // `SELECT * FROM table WHERE col1 = 1`
+        let view_index = RegisterIndex::default();
+        let _ = IntermediateCode {
+            instrs: vec![
+                View {
+                    index: view_index,
+                    name: "table".to_owned(),
+                },
+                Filter {
+                    index: view_index,
+                    col_name: "col1".to_owned(),
+                    operator: 0,
+                    // NOTE: All numbers from the AST will be assumed to be Int64.
+                    // They can be downcasted later if needed.
+                    value: Value::Int64(1),
+                },
+                Return { index: view_index },
+            ],
+        };
+
+        // `SELECT col2, col3 FROM table WHERE col1 = 1`
+        let view_index = RegisterIndex::default();
+        let _ = IntermediateCode {
+            instrs: vec![
+                View {
+                    index: view_index,
+                    name: "table".to_owned(),
+                },
+                Filter {
+                    index: view_index,
+                    col_name: "col1".to_owned(),
+                    operator: 0,
+                    value: Value::Int64(1),
+                },
+                Project {
+                    index: view_index,
+                    col_name: "col2".to_owned(),
+                },
+                Project {
+                    index: view_index,
+                    col_name: "col3".to_owned(),
+                },
+                Return { index: view_index },
+            ],
+        };
+
+        // `SELECT col2, col3 FROM table WHERE col1 = 1 ORDER BY col2 LIMIT 100`
+        let view_index = RegisterIndex::default();
+        let _ = IntermediateCode {
+            instrs: vec![
+                View {
+                    index: view_index,
+                    name: "table".to_owned(),
+                },
+                Filter {
+                    index: view_index,
+                    col_name: "col1".to_owned(),
+                    // TODO: placeholder type
+                    operator: 0,
+                    value: Value::Int64(1),
+                },
+                Project {
+                    index: view_index,
+                    col_name: "col2".to_owned(),
+                },
+                Project {
+                    index: view_index,
+                    col_name: "col3".to_owned(),
+                },
+                Order {
+                    index: view_index,
+                    col_name: "col2".to_owned(),
+                    ascending: true,
+                },
+                Limit {
+                    index: view_index,
+                    limit: 100,
+                },
+                Return { index: view_index },
+            ],
+        };
+
+        // `SELECT col2, MAX(col3) FROM table WHERE col1 = 1 GROUP BY col2 HAVING MAX(col3) > 10`
+        let view_index = RegisterIndex::default();
+        let _ = IntermediateCode {
+            instrs: vec![
+                View {
+                    index: view_index,
+                    name: "table".to_owned(),
+                },
+                Filter {
+                    index: view_index,
+                    col_name: "col1".to_owned(),
+                    operator: 0,
+                    value: Value::Int64(1),
+                },
+                GroupBy {
+                    index: view_index,
+                    col_name: "col2".to_owned(),
+                },
+                Project {
+                    index: view_index,
+                    col_name: "col2".to_owned(),
+                },
+                ProjectAggregate {
+                    index: view_index,
+                    // TODO: placeholder type
+                    aggregation: 0,
+                    col_name: "col3".to_owned(),
+                },
+                Having {
+                    index: view_index,
+                    // TODO: placeholder type
+                    aggregation: Some(0),
+                    col_name: "col3".to_owned(),
+                    // TODO: placeholder type
+                    operator: 1,
+                    value: Value::Int64(10),
+                },
+                Return { index: view_index },
+            ],
+        };
+
+        // `SELECT col2, col3 FROM table WHERE col1 = 1 AND col2 = 2`
+        let view_index = RegisterIndex::default();
+        let _ = IntermediateCode {
+            instrs: vec![
+                View {
+                    index: view_index,
+                    name: "table".to_owned(),
+                },
+                Filter {
+                    index: view_index,
+                    col_name: "col1".to_owned(),
+                    operator: 0,
+                    value: Value::Int64(1),
+                },
+                Filter {
+                    index: view_index,
+                    col_name: "col2".to_owned(),
+                    operator: 0,
+                    value: Value::Int64(2),
+                },
+                Return { index: view_index },
+            ],
+        };
+
+        // `SELECT col2, col3 FROM table WHERE col1 = 1 OR col2 = 2`
+        let view_index_1 = RegisterIndex::default();
+        let view_index_2 = view_index_1.next_index();
+        let view_index_3 = view_index_2.next_index();
+        let _ = IntermediateCode {
+            instrs: vec![
+                View {
+                    index: view_index_1,
+                    name: "table".to_owned(),
+                },
+                Filter {
+                    index: view_index_1,
+                    col_name: "col1".to_owned(),
+                    operator: 1,
+                    value: Value::Int64(1),
+                },
+                View {
+                    index: view_index_2,
+                    name: "table".to_owned(),
+                },
+                Filter {
+                    index: view_index_2,
+                    col_name: "col2".to_owned(),
+                    operator: 0,
+                    value: Value::Int64(2),
+                },
+                Union {
+                    input1: view_index_1,
+                    input2: view_index_2,
+                    output: view_index_3,
+                },
+                Return {
+                    index: view_index_3,
+                },
+            ],
+        };
+    }
+
+    #[test]
+    fn create_statements() {
+        // `CREATE DATABASE db1`
+        let _ = IntermediateCode {
+            instrs: vec![NewDatabase {
+                name: "db1".to_owned(),
+                exists_ok: false,
+            }],
+        };
+
+        // `CREATE SCHEMA schema1`
+        let _ = IntermediateCode {
+            instrs: vec![NewSchema {
+                name: "schema1".to_owned(),
+                exists_ok: false,
+            }],
+        };
+
+        // `CREATE TABLE IF NOT EXISTS table1 (col1 INTEGER PRIMARY KEY NOT NULL, col2 STRING NOT NULL, col3 INTEGER UNIQUE)`
+        let table_index = RegisterIndex::default();
+        let col_index = table_index.next_index();
+        let _ = IntermediateCode {
+            instrs: vec![
+                TableDef {
+                    index: table_index,
+                    name: "table1".to_owned(),
+                },
+                ColumnDef {
+                    index: col_index,
+                    name: "col1".to_owned(),
+                    data_type: DataType::Int(None),
+                },
+                AddColumnOption {
+                    index: col_index,
+                    option: ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::Unique { is_primary: true },
+                    },
+                },
+                AddColumnOption {
+                    index: col_index,
+                    option: ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::NotNull,
+                    },
+                },
+                AddColumn {
+                    table_index,
+                    col_index,
+                },
+                ColumnDef {
+                    index: col_index,
+                    name: "col2".to_owned(),
+                    data_type: DataType::String,
+                },
+                AddColumnOption {
+                    index: col_index,
+                    option: ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::NotNull,
+                    },
+                },
+                AddColumn {
+                    table_index,
+                    col_index,
+                },
+                ColumnDef {
+                    index: col_index,
+                    name: "col3".to_owned(),
+                    data_type: DataType::Int(None),
+                },
+                AddColumnOption {
+                    index: col_index,
+                    option: ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::Unique { is_primary: false },
+                    },
+                },
+                AddColumn {
+                    table_index,
+                    col_index,
+                },
+                NewTable {
+                    index: table_index,
+                    exists_ok: true,
+                },
+            ],
+        };
+    }
+
+    #[test]
+    fn alter_statements() {
+        // `ALTER TABLE table1 ADD COLUMN col4 STRING NULL`
+        let table_index = RegisterIndex::default();
+        let col_index = table_index.next_index();
+        let _ = IntermediateCode {
+            instrs: vec![
+                View {
+                    index: table_index,
+                    name: "table1".to_owned(),
+                },
+                ColumnDef {
+                    index: col_index,
+                    name: "col4".to_owned(),
+                    data_type: DataType::String,
+                },
+                AddColumnOption {
+                    index: col_index,
+                    option: ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::Null,
+                    },
+                },
+                AddColumn {
+                    table_index,
+                    col_index,
+                },
+            ],
+        };
+
+        // `ALTER TABLE table1 RENAME COLUMN col4 col5`
+        let table_index = RegisterIndex::default();
+        let _ = IntermediateCode {
+            instrs: vec![
+                View {
+                    index: table_index,
+                    name: "table1".to_owned(),
+                },
+                RenameColumn {
+                    index: table_index,
+                    old_name: "col4".to_owned(),
+                    new_name: "col5".to_owned(),
+                },
+            ],
+        };
+
+        // `ALTER TABLE table1 DROP COLUMN col5`
+        let table_index = RegisterIndex::default();
+        let _ = IntermediateCode {
+            instrs: vec![
+                View {
+                    index: table_index,
+                    name: "table1".to_owned(),
+                },
+                RemoveColumn {
+                    index: table_index,
+                    col_name: "col5".to_owned(),
+                },
+            ],
+        };
+    }
+
+    #[test]
+    fn insert_statements() {
+        // `INSERT INTO table1 VALUES (1, 'foo', 2)`
+
+        // `INSERT INTO table1 (col1, col2) VALUES (1, 'foo')`
+
+        // `INSERT INTO table1 VALUES (2, 'bar', 3), (3, 'baz', 4)`
+    }
+
+    #[test]
+    fn update_statements() {
+        // `UPDATE table1 SET col2 = 'bar' WHERE col1 = 1`
+
+        // `UPDATE table1 SET col2 = 'bar' WHERE col1 = 1 AND col3 = 2`
+
+        // `UPDATE table1 SET col2 = 'bar', col3 = 4 WHERE col1 = 1 AND col3 = 2`
+
+        // `UPDATE table1 SET col2 = 'bar' WHERE col1 = 1 OR col3 = 2`
+
+        // `UPDATE table1 SET col3 = col3 + 1 WHERE col2 = 'foo'`
+    }
+
+    #[test]
+    fn select_with_joins() {
+        // `SELECT col1, col2, col5 FROM table1 INNER JOIN table2 ON table1.col2 = table2.col3`
+
+        // `SELECT col1, col2, col5 FROM table1, table2`
+
+        // `SELECT col1, col2, col5 FROM table1 NATURAL JOIN table2`
+
+        // `SELECT col1, col2, col5 FROM table1 LEFT OUTER JOIN table2 ON table1.col2 = table2.col3`
+    }
 }
