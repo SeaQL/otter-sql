@@ -1,6 +1,10 @@
 use sqlparser::ast::{ColumnOptionDef, DataType};
 
-use crate::{vm::{RegisterIndex, BinOp, UnOp}, value::Value, BoundedString};
+use crate::{
+    value::Value,
+    vm::{BinOp, RegisterIndex, UnOp},
+    BoundedString,
+};
 
 /// The intermediate representation of a query.
 pub struct IntermediateCode {
@@ -24,9 +28,7 @@ pub enum Instruction {
     },
 
     /// Create a new empty [`Register::View`](`crate::vm::Register::View`) into register `index`.
-    Empty {
-        index: RegisterIndex,
-    },
+    Empty { index: RegisterIndex },
 
     /// Reference an existing column from the given [`Register::View`](`crate::vm::Register::View`) at register `view_index` into register `index`.
     ///
@@ -40,10 +42,7 @@ pub enum Instruction {
     /// Store a value in the register `index`.
     ///
     /// The value at register `index` will be of type [`Register::Expr`](`crate::vm::Register::Expr`).
-    Value {
-        index: RegisterIndex,
-        value: Value,
-    },
+    Value { index: RegisterIndex, value: Value },
 
     /// Store a function call description in the register `index`.
     ///
@@ -222,7 +221,10 @@ pub enum Instruction {
     },
 
     /// Add a value to the [`Register::InsertRow`](`crate::vm::Register::InsertRow`) in register `index`.
-    AddValue { row_index: RegisterIndex, expr_index: RegisterIndex },
+    AddValue {
+        row_index: RegisterIndex,
+        expr_index: RegisterIndex,
+    },
 
     /// Perform insertion defined in the [`Register::InsertRow`](`crate::vm::Register::InsertRow`) in register `index`.
     ///
@@ -275,7 +277,10 @@ pub enum Instruction {
 mod test {
     use sqlparser::ast::{ColumnOption, ColumnOptionDef, DataType};
 
-    use crate::{value, vm::{RegisterIndex, BinOp}};
+    use crate::{
+        value,
+        vm::{BinOp, RegisterIndex},
+    };
 
     use super::{Instruction::*, IntermediateCode};
 
@@ -284,13 +289,11 @@ mod test {
     fn select_statements() {
         // `SELECT 1`
         let _ = IntermediateCode {
-            instrs: vec![
-                Value {
-                    index: RegisterIndex::default(),
-                    // NOTE: All numbers from the AST will be assumed to be Int64.
-                    value: value::Value::Int64(1),
-                },
-            ]
+            instrs: vec![Value {
+                index: RegisterIndex::default(),
+                // NOTE: All numbers from the AST will be assumed to be Int64.
+                value: value::Value::Int64(1),
+            }],
         };
 
         // `SELECT * FROM table1`
@@ -494,7 +497,10 @@ mod test {
                     view_index: view_index,
                     col_name: "col2".into(),
                 },
-                GroupBy { view_index: view_index, expr_index: temp_index_1 },
+                GroupBy {
+                    view_index: view_index,
+                    expr_index: temp_index_1,
+                },
                 Column {
                     col_index: temp_index_1,
                     view_index: view_index,
@@ -518,7 +524,11 @@ mod test {
                     fn_index: temp_index_2,
                     arg_index: temp_index_1,
                 },
-                Project { view_index: view_index, expr_index: temp_index_2, alias: Some("max_col3".into()) },
+                Project {
+                    view_index: view_index,
+                    expr_index: temp_index_2,
+                    alias: Some("max_col3".into()),
+                },
                 // TODO: having?
                 Return { index: view_index },
             ],
@@ -623,7 +633,6 @@ mod test {
                     operator: BinOp::Equal,
                     input2: temp_index_2,
                 },
-
                 Source {
                     index: view_index_2,
                     name: "table1".into(),
@@ -647,7 +656,6 @@ mod test {
                     view_index: view_index_2,
                     expr_index: temp_index_1,
                 },
-
                 Union {
                     input1: view_index,
                     input2: view_index_2,

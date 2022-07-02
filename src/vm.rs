@@ -4,8 +4,8 @@ use std::fmt::Display;
 use sqlparser::ast::Value;
 
 use crate::column::Column;
-use crate::{Mrc, BoundedString};
 use crate::{ic::IntermediateCode, table::Table};
+use crate::{BoundedString, Mrc};
 
 /// An index that can be used to access a specific register.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
