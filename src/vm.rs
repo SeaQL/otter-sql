@@ -79,6 +79,10 @@ pub enum Expr {
         op: UnOp,
         operand: Box<Expr>,
     },
+    Function {
+        name: BoundedString,
+        args: Vec<Expr>,
+    },
 }
 
 /// A binary operator.
