@@ -4,7 +4,7 @@ use std::fmt::Display;
 use sqlparser::ast::Value;
 
 use crate::column::Column;
-use crate::Mrc;
+use crate::{Mrc, BoundedString};
 use crate::{ic::IntermediateCode, table::Table};
 
 /// An index that can be used to access a specific register.
@@ -52,8 +52,6 @@ impl VirtualMachine {
 pub enum Register {
     /// A view into a table.
     View(View),
-    /// An SQL value
-    Value(Value),
     /// A table definition.
     TableDef(TableDef),
     /// A column definition
@@ -62,12 +60,68 @@ pub enum Register {
     InsertDef(InsertDef),
     /// A row to insert
     InsertRow(InsertRow),
+    /// An expression
+    Expr(Expr),
     // TODO: an error value?
+}
+
+/// An expression
+#[derive(Debug, Clone)]
+pub enum Expr {
+    Value(Value),
+    ColumnRef(BoundedString),
+    Binary {
+        left: Box<Expr>,
+        op: BinOp,
+        right: Box<Expr>,
+    },
+    Unary {
+        op: UnOp,
+        operand: Box<Expr>,
+    },
+}
+
+/// A binary operator.
+#[derive(Debug, Copy, Clone)]
+pub enum BinOp {
+    Plus,
+    Minus,
+    Multiply,
+    Divide,
+    Modulo,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
+    Like,
+    ILike,
+    Between,
+    NotBetween,
+}
+
+/// A unary operator
+#[derive(Debug, Copy, Clone)]
+pub enum UnOp {
+    Plus,
+    Minus,
+    IsFalse,
+    IsTrue,
+    IsNull,
+    IsNotNull,
+}
+
+impl From<sqlparser::ast::Expr> for Expr {
+    fn from(_: sqlparser::ast::Expr) -> Self {
+        // TODO: implement
+        todo!()
+    }
 }
 
 /// An abstract definition of a create table statement.
 pub struct TableDef {
-    pub name: String,
+    pub name: BoundedString,
     pub columns: Vec<Column>,
 }
 

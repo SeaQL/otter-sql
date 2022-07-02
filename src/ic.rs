@@ -1,6 +1,6 @@
-use sqlparser::ast::{ColumnOptionDef, DataType};
+use sqlparser::ast::{ColumnOptionDef, DataType, Expr};
 
-use crate::{vm::RegisterIndex, value::Value, BoundedString};
+use crate::{vm::{RegisterIndex, BinOp, UnOp}, value::Value, BoundedString};
 
 /// The intermediate representation of a query.
 pub struct IntermediateCode {
@@ -10,46 +10,70 @@ pub struct IntermediateCode {
 /// The instruction set.
 #[derive(Debug, Clone)]
 pub enum Instruction {
-    /// Make a new [`Register::View`](`crate::vm::Register::View`) of a table into register `index`.
-    ///
-    /// The table given by `name` is loaded into the view.
-    // TODO: should the table exist already or do we allow making new temporary views?
-    View {
+    /// Make a new [`Register::View`](`crate::vm::Register::View`) of an *existing* table into register `index`.
+    Source {
         index: RegisterIndex,
         name: BoundedString,
     },
 
-    /// Add a filter over single column on the [`Register::View`](`crate::vm::Register::View`) in register `index`.
+    /// Make a new [`Register::View`](`crate::vm::Register::View`) of an *existing* table in the specified schema into register `index`.
+    SourceFromSchema {
+        index: RegisterIndex,
+        schema_name: BoundedString,
+        name: BoundedString,
+    },
+
+    /// Create a new empty [`Register::View`](`crate::vm::Register::View`) into register `index`.
+    Empty {
+        index: RegisterIndex,
+    },
+
+    /// Reference an existing column from the given [`Register::View`](`crate::vm::Register::View`) at register `view_index` into register `index`.
     ///
-    /// The filter applied is `col_name <operator> value`.
+    /// The value at register `index` will be of type [`Register::Expr`](`crate::vm::Register::Expr`).
+    Column {
+        index: RegisterIndex,
+        view_index: RegisterIndex,
+        col_name: BoundedString,
+    },
+
+    /// Construct a binary operation.
+    ///
+    /// Both the inputs must be of type [`Register::Expr`](`crate::vm::Register::Expr`).
+    /// The output will also be a [`Register::Expr`](`crate::vm::Register::Expr`).
+    Binary {
+        output: RegisterIndex,
+        input1: RegisterIndex,
+        operator: BinOp,
+        input2: RegisterIndex,
+    },
+
+    /// Construct a unary operation.
+    ///
+    /// The input must be of type [`Register::Expr`](`crate::vm::Register::Expr`).
+    /// The output will also be a [`Register::Expr`](`crate::vm::Register::Expr`).
+    Unary {
+        output: RegisterIndex,
+        operator: UnOp,
+        input: RegisterIndex,
+    },
+
+    /// Add a filter over single column on the [`Register::View`](`crate::vm::Register::View`) in register `index`.
     ///
     /// This represents a `WHERE` clause in SQL.
     Filter {
         index: RegisterIndex,
-        col_name: BoundedString,
-        // TODO: placeholder type!
-        operator: u32,
-        value: Value,
+        expr_index: RegisterIndex,
     },
 
-    /// Add a projection of single column on the [`Register::View`](`crate::vm::Register::View`) in register `index`.
+    /// Add a projection of a single column on the [`Register::View`](`crate::vm::Register::View`) in register `index`.
     ///
     /// This represents the column list of the `SELECT` statement in SQL. If there are no
     /// projections given, all columns are considered/returned.
     Project {
         index: RegisterIndex,
-        col_name: BoundedString,
-    },
-
-    /// Add a projection of a single column with an aggregation to the [`Register::View`](`crate::vm::Register::View`) in register `index`.
-    ///
-    /// This must only be used with a statement that has a `GROUP BY` clause. Additionally, this
-    /// column must not appear in the `GROUP BY` clause.
-    ProjectAggregate {
-        index: RegisterIndex,
-        // TODO: placeholder type!
-        aggregation: u32,
-        col_name: BoundedString,
+        expr_index: RegisterIndex,
+        alias: Option<BoundedString>,
     },
 
     /// Add a grouping on a single column to the [`Register::View`](`crate::vm::Register::View`) in register `index`.
@@ -58,19 +82,6 @@ pub enum Instruction {
     GroupBy {
         index: RegisterIndex,
         col_name: BoundedString,
-    },
-
-    /// Add a post grouping filter on a single column to the [`Register::View`](`crate::vm::Register::View`) in register `index`.
-    ///
-    /// This must only be used with a statement that has a `GROUP BY` clause.
-    Having {
-        index: RegisterIndex,
-        // TODO: placeholder type!
-        aggregation: Option<u32>,
-        col_name: BoundedString,
-        // TODO: placeholder type!
-        operator: u32,
-        value: Value,
     },
 
     /// Add an ordering for a single column on the [`Register::View`](`crate::vm::Register::View`) in register `index`.
@@ -175,7 +186,7 @@ pub enum Instruction {
     },
 
     /// Add a column to the [`Register::InsertDef`](`crate::vm::Register::InsertDef`) in register `index`.
-    Column {
+    ColumnInsertDef {
         index: RegisterIndex,
         col_name: BoundedString,
     },
@@ -198,14 +209,12 @@ pub enum Instruction {
 
     /// Update values of the [`Register::View`](`crate::vm::Register::View`) in register `index`.
     ///
-    /// The `col_name` column's value is set to `value` for all rows.
-    ///
     /// This represents an `UPDATE` statement.
     Update {
         index: RegisterIndex,
-        col_name: BoundedString,
-        // TODO: support expressions instead of just values.
-        value: Value,
+        /// Register where the column name is stored.
+        col_index: RegisterIndex,
+        expr: Expr,
     },
 
     /// Perform a union of the [`Register::View`](`crate::vm::Register::View`) in register `input1` and the [`Register::View`](`crate::vm::Register::View`) in register `input2`.
@@ -251,6 +260,8 @@ mod test {
     // TODO: placeholder tests. Test actual AST -> IC conversion once that is implemented.
     #[test]
     fn select_statements() {
+        // `SELECT 1`
+
         // `SELECT * FROM table`
         let view_index = RegisterIndex::default();
         let _ = IntermediateCode {
