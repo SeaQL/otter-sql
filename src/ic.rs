@@ -1,4 +1,4 @@
-use sqlparser::ast::{ColumnOptionDef, DataType, Expr};
+use sqlparser::ast::{ColumnOptionDef, DataType};
 
 use crate::{vm::{RegisterIndex, BinOp, UnOp}, value::Value, BoundedString};
 
@@ -209,7 +209,7 @@ pub enum Instruction {
 
     /// Add a column to the [`Register::InsertDef`](`crate::vm::Register::InsertDef`) in register `index`.
     ColumnInsertDef {
-        index: RegisterIndex,
+        insert_index: RegisterIndex,
         col_name: BoundedString,
     },
 
@@ -218,11 +218,11 @@ pub enum Instruction {
     /// The value stored in the register `index` will be of type [`Register::InsertRow`](`crate::vm::Register::InsertRow`).
     RowDef {
         insert_index: RegisterIndex,
-        index: RegisterIndex,
+        row_index: RegisterIndex,
     },
 
     /// Add a value to the [`Register::InsertRow`](`crate::vm::Register::InsertRow`) in register `index`.
-    AddValue { index: RegisterIndex, value: Value },
+    AddValue { row_index: RegisterIndex, expr_index: RegisterIndex },
 
     /// Perform insertion defined in the [`Register::InsertRow`](`crate::vm::Register::InsertRow`) in register `index`.
     ///
@@ -236,7 +236,7 @@ pub enum Instruction {
         index: RegisterIndex,
         /// Register where the column name is stored.
         col_index: RegisterIndex,
-        expr: Expr,
+        expr_index: RegisterIndex,
     },
 
     /// Perform a union of the [`Register::View`](`crate::vm::Register::View`) in register `input1` and the [`Register::View`](`crate::vm::Register::View`) in register `input2`.
