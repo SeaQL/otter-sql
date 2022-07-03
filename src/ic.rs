@@ -226,8 +226,9 @@ mod test {
     use sqlparser::ast::{ColumnOption, ColumnOptionDef, DataType};
 
     use crate::{
+        table::TABLE_UNIQUE_KEY_NAME,
         value,
-        vm::{BinOp, Expr, RegisterIndex},
+        vm::{BinOp, Expr, RegisterIndex, UnOp},
     };
 
     use super::{Instruction::*, IntermediateCode};
@@ -661,6 +662,264 @@ mod test {
     }
 
     #[test]
+    fn select_with_joins() {
+        // `SELECT col1, col2, col5 FROM table1 INNER JOIN table2 ON table1.col2 = table2.col3`
+        let table_index = RegisterIndex::default();
+        let table_index_2 = table_index.next_index();
+        let table_index_3 = table_index_2.next_index();
+        let table_index_4 = table_index_3.next_index();
+        let _ = IntermediateCode {
+            instrs: vec![
+                Source {
+                    index: table_index,
+                    name: "table1".into(),
+                },
+                Source {
+                    index: table_index_2,
+                    name: "table2".into(),
+                },
+                CrossJoin {
+                    input1: table_index,
+                    input2: table_index_2,
+                    output: table_index_3,
+                },
+                Filter {
+                    index: table_index_3,
+                    expr: Expr::Binary {
+                        left: Box::new(Expr::ColumnRef("table1.col2".into())),
+                        op: BinOp::Equal,
+                        right: Box::new(Expr::ColumnRef("table2.col3".into())),
+                    },
+                },
+                // Inner join, so remove NULLs
+                Filter {
+                    index: table_index_3,
+                    expr: Expr::Unary {
+                        op: UnOp::IsNotNull,
+                        operand: Box::new(Expr::ColumnRef(
+                            format!("table1.{}", TABLE_UNIQUE_KEY_NAME).as_str().into(),
+                        )),
+                    },
+                },
+                // Inner join, so remove NULLs
+                Filter {
+                    index: table_index_3,
+                    expr: Expr::Unary {
+                        op: UnOp::IsNotNull,
+                        operand: Box::new(Expr::ColumnRef(
+                            format!("table2.{}", TABLE_UNIQUE_KEY_NAME).as_str().into(),
+                        )),
+                    },
+                },
+                Empty {
+                    index: table_index_4,
+                },
+                Project {
+                    input: table_index_3,
+                    output: table_index_4,
+                    expr: Expr::ColumnRef("col1".into()),
+                    alias: None,
+                },
+                Project {
+                    input: table_index_3,
+                    output: table_index_4,
+                    expr: Expr::ColumnRef("col2".into()),
+                    alias: None,
+                },
+                Project {
+                    input: table_index_3,
+                    output: table_index_4,
+                    expr: Expr::ColumnRef("col5".into()),
+                    alias: None,
+                },
+                Return {
+                    index: table_index_4,
+                },
+            ],
+        };
+
+        // `SELECT col1, col2, col5 FROM table1, table2`
+        let table_index = RegisterIndex::default();
+        let table_index_2 = table_index.next_index();
+        let table_index_3 = table_index_2.next_index();
+        let table_index_4 = table_index_3.next_index();
+        let _ = IntermediateCode {
+            instrs: vec![
+                Source {
+                    index: table_index,
+                    name: "table1".into(),
+                },
+                Source {
+                    index: table_index_2,
+                    name: "table2".into(),
+                },
+                CrossJoin {
+                    input1: table_index,
+                    input2: table_index_2,
+                    output: table_index_3,
+                },
+                Empty {
+                    index: table_index_4,
+                },
+                Project {
+                    input: table_index_3,
+                    output: table_index_4,
+                    expr: Expr::ColumnRef("col1".into()),
+                    alias: None,
+                },
+                Project {
+                    input: table_index_3,
+                    output: table_index_4,
+                    expr: Expr::ColumnRef("col2".into()),
+                    alias: None,
+                },
+                Project {
+                    input: table_index_3,
+                    output: table_index_4,
+                    expr: Expr::ColumnRef("col5".into()),
+                    alias: None,
+                },
+                Return {
+                    index: table_index_4,
+                },
+            ],
+        };
+
+        // `SELECT col1, col2, col5 FROM table1 NATURAL JOIN table2`
+        let table_index = RegisterIndex::default();
+        let table_index_2 = table_index.next_index();
+        let table_index_3 = table_index_2.next_index();
+        let table_index_4 = table_index_3.next_index();
+        let _ = IntermediateCode {
+            instrs: vec![
+                Source {
+                    index: table_index,
+                    name: "table1".into(),
+                },
+                Source {
+                    index: table_index_2,
+                    name: "table2".into(),
+                },
+                NaturalJoin {
+                    input1: table_index,
+                    input2: table_index_2,
+                    output: table_index_3,
+                },
+                // Not an outer join, so remove NULLs
+                Filter {
+                    index: table_index_3,
+                    expr: Expr::Unary {
+                        op: UnOp::IsNotNull,
+                        operand: Box::new(Expr::ColumnRef(
+                            format!("table1.{}", TABLE_UNIQUE_KEY_NAME).as_str().into(),
+                        )),
+                    },
+                },
+                // Not an outer join, so remove NULLs
+                Filter {
+                    index: table_index_3,
+                    expr: Expr::Unary {
+                        op: UnOp::IsNotNull,
+                        operand: Box::new(Expr::ColumnRef(
+                            format!("table2.{}", TABLE_UNIQUE_KEY_NAME).as_str().into(),
+                        )),
+                    },
+                },
+                Empty {
+                    index: table_index_4,
+                },
+                Project {
+                    input: table_index_3,
+                    output: table_index_4,
+                    expr: Expr::ColumnRef("col1".into()),
+                    alias: None,
+                },
+                Project {
+                    input: table_index_3,
+                    output: table_index_4,
+                    expr: Expr::ColumnRef("col2".into()),
+                    alias: None,
+                },
+                Project {
+                    input: table_index_3,
+                    output: table_index_4,
+                    expr: Expr::ColumnRef("col5".into()),
+                    alias: None,
+                },
+                Return {
+                    index: table_index_4,
+                },
+            ],
+        };
+
+        // `SELECT col1, col2, col5 FROM table1 LEFT OUTER JOIN table2 ON table1.col2 = table2.col3`
+        let table_index = RegisterIndex::default();
+        let table_index_2 = table_index.next_index();
+        let table_index_3 = table_index_2.next_index();
+        let table_index_4 = table_index_3.next_index();
+        let _ = IntermediateCode {
+            instrs: vec![
+                Source {
+                    index: table_index,
+                    name: "table1".into(),
+                },
+                Source {
+                    index: table_index_2,
+                    name: "table2".into(),
+                },
+                CrossJoin {
+                    input1: table_index,
+                    input2: table_index_2,
+                    output: table_index_3,
+                },
+                Filter {
+                    index: table_index_3,
+                    expr: Expr::Binary {
+                        left: Box::new(Expr::ColumnRef("table1.col2".into())),
+                        op: BinOp::Equal,
+                        right: Box::new(Expr::ColumnRef("table2.col3".into())),
+                    },
+                },
+                // Left outer join, so don't remove NULLs from first table
+                // Left outer join, so remove NULLs from second table
+                Filter {
+                    index: table_index_3,
+                    expr: Expr::Unary {
+                        op: UnOp::IsNotNull,
+                        operand: Box::new(Expr::ColumnRef(
+                            format!("table2.{}", TABLE_UNIQUE_KEY_NAME).as_str().into(),
+                        )),
+                    },
+                },
+                Empty {
+                    index: table_index_4,
+                },
+                Project {
+                    input: table_index_3,
+                    output: table_index_4,
+                    expr: Expr::ColumnRef("col1".into()),
+                    alias: None,
+                },
+                Project {
+                    input: table_index_3,
+                    output: table_index_4,
+                    expr: Expr::ColumnRef("col2".into()),
+                    alias: None,
+                },
+                Project {
+                    input: table_index_3,
+                    output: table_index_4,
+                    expr: Expr::ColumnRef("col5".into()),
+                    alias: None,
+                },
+                Return {
+                    index: table_index_4,
+                },
+            ],
+        };
+    }
+
+    #[test]
     fn insert_statements() {
         // `INSERT INTO table1 VALUES (1, 'foo', 2)`
 
@@ -680,16 +939,7 @@ mod test {
         // `UPDATE table1 SET col2 = 'bar' WHERE col1 = 1 OR col3 = 2`
 
         // `UPDATE table1 SET col3 = col3 + 1 WHERE col2 = 'foo'`
-    }
 
-    #[test]
-    fn select_with_joins() {
-        // `SELECT col1, col2, col5 FROM table1 INNER JOIN table2 ON table1.col2 = table2.col3`
-
-        // `SELECT col1, col2, col5 FROM table1, table2`
-
-        // `SELECT col1, col2, col5 FROM table1 NATURAL JOIN table2`
-
-        // `SELECT col1, col2, col5 FROM table1 LEFT OUTER JOIN table2 ON table1.col2 = table2.col3`
+        // `UPDATE table1, table2 SET table1.col3 = table1.col3 + 1 WHERE table2.col2 = 'foo'`
     }
 }

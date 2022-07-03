@@ -2,7 +2,7 @@ use sqlparser::ast::{ColumnOption, ColumnOptionDef, DataType};
 
 use crate::{column::Column, value::Value, BoundedString};
 
-const TABLE_UNIQUE_KEY_NAME: &str = "__unique_key";
+pub const TABLE_UNIQUE_KEY_NAME: &str = "__unique_key";
 
 /// A table in a database.
 ///
