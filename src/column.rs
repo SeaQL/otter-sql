@@ -3,6 +3,7 @@ use sqlparser::ast::{ColumnOptionDef, DataType};
 use crate::BoundedString;
 
 /// A column's metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Column {
     name: BoundedString,
     data_type: DataType,
