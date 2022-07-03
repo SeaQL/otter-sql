@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use sqlparser::ast::Value;
-
 use crate::column::Column;
-use crate::{ic::IntermediateCode, table::Table};
+use crate::ic::IntermediateCode;
+use crate::table::Row;
+use crate::value::Value;
 use crate::{BoundedString, Mrc};
 
 /// An index that can be used to access a specific register.
@@ -50,8 +50,18 @@ impl VirtualMachine {
 
 /// A register in the executor VM.
 pub enum Register {
-    /// A view into a table.
-    View(View),
+    /// An entire table.
+    Table {
+        columns: Vec<Column>,
+        data: Vec<Row>,
+    },
+    /// A grouped table.
+    GroupedTable {
+        grouped_col: Column,
+        other_cols: Vec<Column>,
+        /// The group, a mapping of grouped col value -> rows in that group.
+        data: Vec<(Value, Vec<Row>)>
+    },
     /// A table definition.
     TableDef(TableDef),
     /// A column definition
@@ -60,8 +70,6 @@ pub enum Register {
     InsertDef(InsertDef),
     /// A row to insert
     InsertRow(InsertRow),
-    /// An expression
-    Expr(Expr),
     // TODO: an error value?
 }
 
@@ -103,6 +111,8 @@ pub enum BinOp {
     ILike,
     Between,
     NotBetween,
+    And,
+    Or,
 }
 
 /// A unary operator
@@ -116,13 +126,6 @@ pub enum UnOp {
     IsNotNull,
 }
 
-impl From<sqlparser::ast::Expr> for Expr {
-    fn from(_: sqlparser::ast::Expr) -> Self {
-        // TODO: implement
-        todo!()
-    }
-}
-
 /// An abstract definition of a create table statement.
 pub struct TableDef {
     pub name: BoundedString,
@@ -132,7 +135,7 @@ pub struct TableDef {
 /// An abstract definition of an insert statement.
 pub struct InsertDef {
     /// The view to insert into
-    pub view: Mrc<View>,
+    pub table_name: BoundedString,
     /// The columns to insert into.
     ///
     /// Empty means all columns.
@@ -142,9 +145,9 @@ pub struct InsertDef {
 }
 
 impl InsertDef {
-    pub fn new(view: Mrc<View>) -> Self {
+    pub fn new(table_name: BoundedString) -> Self {
         Self {
-            view,
+            table_name,
             columns: Vec::new(),
             rows: Vec::new(),
         }
@@ -157,52 +160,6 @@ pub struct InsertRow {
     pub values: Vec<Value>,
     /// The insert definition which this belongs to
     pub def: Mrc<InsertDef>,
-}
-
-/// A mutable "view" into a table.
-///
-/// Filters, projections and ordering may be applied to the view.
-///
-/// Note: not related to views of queries that some databases support.
-pub struct View {
-    table: Mrc<Table>,
-    // TODO: type for filters. usize is a placeholder.
-    filters: Vec<usize>,
-    // TODO: type for projections. usize is a placeholder.
-    // TODO: must support aggregation projections too.
-    projections: Vec<usize>,
-    // TODO: type for ordering. usize is a placeholder.
-    orderings: Vec<usize>,
-    // TODO: type for group by. usize is a placeholder.
-    group_bys: Vec<usize>,
-    // TODO: type for having. usize is a placeholder.
-    havings: Vec<usize>,
-}
-
-impl View {
-    /// Creates a new view into the given table.
-    pub fn new(table: Mrc<Table>) -> Self {
-        View {
-            table,
-            filters: Vec::new(),
-            projections: Vec::new(),
-            orderings: Vec::new(),
-            group_bys: Vec::new(),
-            havings: Vec::new(),
-        }
-    }
-
-    /// Returns the final data after applying all operations.
-    pub fn get_data(&self) -> Table {
-        // TODO: implement fn and remove placeholders
-        let _ = &self.table;
-        let _ = &self.filters;
-        let _ = &self.projections;
-        let _ = &self.orderings;
-        let _ = &self.group_bys;
-        let _ = &self.havings;
-        todo!()
-    }
 }
 
 #[cfg(test)]

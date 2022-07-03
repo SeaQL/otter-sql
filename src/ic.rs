@@ -2,7 +2,7 @@ use sqlparser::ast::{ColumnOptionDef, DataType};
 
 use crate::{
     value::Value,
-    vm::{BinOp, RegisterIndex, UnOp},
+    vm::{Expr, RegisterIndex},
     BoundedString,
 };
 
@@ -14,107 +14,66 @@ pub struct IntermediateCode {
 /// The instruction set.
 #[derive(Debug, Clone)]
 pub enum Instruction {
-    /// Make a new [`Register::View`](`crate::vm::Register::View`) of an *existing* table into register `index`.
+    /// Load a [`Value`] into a register.
+    Value { index: RegisterIndex, value: Value },
+
+    /// Load an *existing* table given by `name`.
+    ///
+    /// This will result in a [`Register::Table`](`crate::vm::Register::Table`) being stored at the
+    /// given register.
     Source {
         index: RegisterIndex,
         name: BoundedString,
     },
 
-    /// Make a new [`Register::View`](`crate::vm::Register::View`) of an *existing* table in the specified schema into register `index`.
+    /// Load an *existing* table given by `name` from the schema `schema_name`.
+    ///
+    /// This will result in a [`Register::Table`](`crate::vm::Register::Table`) being stored at the
+    /// given register.
     SourceFromSchema {
         index: RegisterIndex,
         schema_name: BoundedString,
         name: BoundedString,
     },
 
-    /// Create a new empty [`Register::View`](`crate::vm::Register::View`) into register `index`.
+    /// Create a new empty [`Register::Table`](`crate::vm::Register::Table`).
     Empty { index: RegisterIndex },
 
-    /// Reference an existing column from the given [`Register::View`](`crate::vm::Register::View`) at register `view_index` into register `index`.
+    /// Filter the [`Register::Table`](`crate::vm::Register::Table`) at `index` using the given expression.
     ///
-    /// The value at register `index` will be of type [`Register::Expr`](`crate::vm::Register::Expr`).
-    Column {
-        col_index: RegisterIndex,
-        view_index: RegisterIndex,
-        col_name: BoundedString,
-    },
+    /// This represents a `WHERE` clause of a `SELECT` statement in SQL.
+    Filter { index: RegisterIndex, expr: Expr },
 
-    /// Store a value in the register `index`.
+    /// Create a projection of the columns of the [`Register::Table`](`crate::vm::Register::Table`) at `input`.
     ///
-    /// The value at register `index` will be of type [`Register::Expr`](`crate::vm::Register::Expr`).
-    Value { index: RegisterIndex, value: Value },
-
-    /// Store a function call description in the register `index`.
+    /// The resultant column is added to the [`Register::Table`](`crate::vm::Register::Table`)
+    /// at `output`. It must be either an empty table or a table with the same number of rows.
     ///
-    /// The value at register `index` will be of type [`Register::Expr`](`crate::vm::Register::Expr`).
-    Function {
-        index: RegisterIndex,
-        name: BoundedString,
-    },
-
-    /// Add an argument to a function call in the register `index`.
-    PushArg {
-        fn_index: RegisterIndex,
-        arg_index: RegisterIndex,
-    },
-
-    /// Construct a binary operation.
-    ///
-    /// Both the inputs must be of type [`Register::Expr`](`crate::vm::Register::Expr`).
-    /// The output will also be a [`Register::Expr`](`crate::vm::Register::Expr`).
-    Binary {
-        output: RegisterIndex,
-        input1: RegisterIndex,
-        operator: BinOp,
-        input2: RegisterIndex,
-    },
-
-    /// Construct a unary operation.
-    ///
-    /// The input must be of type [`Register::Expr`](`crate::vm::Register::Expr`).
-    /// The output will also be a [`Register::Expr`](`crate::vm::Register::Expr`).
-    Unary {
-        output: RegisterIndex,
-        operator: UnOp,
-        input: RegisterIndex,
-    },
-
-    /// Add a filter over single column on the [`Register::View`](`crate::vm::Register::View`) in register `index`.
-    ///
-    /// This represents a `WHERE` clause in SQL.
-    Filter {
-        view_index: RegisterIndex,
-        expr_index: RegisterIndex,
-    },
-
-    /// Add a projection of a single column on the [`Register::View`](`crate::vm::Register::View`) in register `index`.
-    ///
-    /// This represents the column list of the `SELECT` statement in SQL. If there are no
-    /// projections given, all columns are considered/returned.
+    /// This represents the column list of the `SELECT` statement in SQL.
     Project {
-        view_index: RegisterIndex,
-        expr_index: RegisterIndex,
+        input: RegisterIndex,
+        output: RegisterIndex,
+        expr: Expr,
         alias: Option<BoundedString>,
     },
 
-    /// Add a grouping on a single column to the [`Register::View`](`crate::vm::Register::View`) in register `index`.
+    /// Group the [`Register::Table`](`crate::vm::Register::Table`) at `index` by the given expression.
+    ///
+    /// This will result in a [`Register::GroupedTable`](`crate::vm::Register::GroupedTable`) being stored at the `index` register.
     ///
     /// Must be added before any projections so as to catch errors in column selections.
-    GroupBy {
-        view_index: RegisterIndex,
-        expr_index: RegisterIndex,
-    },
+    GroupBy { index: RegisterIndex, expr: Expr },
 
-    /// Add an ordering for a single column on the [`Register::View`](`crate::vm::Register::View`) in register `index`.
+    /// Order the [`Register::Table`](`crate::vm::Register::Table`) at `index` by the given expression.
     ///
     /// This represents the `ORDER BY` clause in SQL.
     Order {
-        view_index: RegisterIndex,
-        expr_index: RegisterIndex,
+        index: RegisterIndex,
+        expr: Expr,
         ascending: bool,
     },
 
-    /// Add a row limit for the [`Register::View`](`crate::vm::Register::View`) in register `index`.
+    /// Truncate the [`Register::Table`](`crate::vm::Register::Table`) at `index` to the given number of rows.
     ///
     /// This represents the `LIMIT` clause in SQL.
     Limit { index: RegisterIndex, limit: u64 },
@@ -143,15 +102,6 @@ pub enum Instruction {
         exists_ok: bool,
     },
 
-    /// Start defining a new table and store the temporary metadata in register `index`.
-    ///
-    /// The value stored in the register will be of type [`Register::TableDef`](`crate::vm::Register::TableDef`).
-    TableDef {
-        index: RegisterIndex,
-        /// The table name.
-        name: BoundedString,
-    },
-
     /// Start defining a  new column and store the temporary metadata in register `index`.
     ///
     /// The value stored in the register will be of type [`Register::Column`](`crate::vm::Register::Column`).
@@ -168,37 +118,36 @@ pub enum Instruction {
         option: ColumnOptionDef,
     },
 
-    /// Add column in register `col_index` to the table in register `table_index`.
-    ///
-    /// The table can be a [`Register::TableDef`](`crate::vm::Register::TableDef`) or a [`Register::View`](`crate::vm::Register::View`).
+    /// Add column in register `col_index` to the [`Register::Table`](`crate::vm::Register::Table`) in `table_index`.
     AddColumn {
         table_index: RegisterIndex,
         col_index: RegisterIndex,
     },
 
-    /// Create table from the [`Register::TableDef`](`crate::vm::Register::TableDef`) in register `index`.
+    /// Create table from the [`Register::Table`](`crate::vm::Register::Table`) in register `index`.
     ///
     /// This represents a `CREATE TABLE [IF NOT EXISTS]` statement.
     NewTable {
         index: RegisterIndex,
+        name: BoundedString,
         /// If `true`, the table is not created if it exists and no error is returned.
         exists_ok: bool,
     },
 
-    /// Remove the given column from the [`Register::View`](`crate::vm::Register::View`) in register `index`.
+    /// Remove the given column from the [`Register::Table`](`crate::vm::Register::Table`) in register `index`.
     RemoveColumn {
         index: RegisterIndex,
         col_name: BoundedString,
     },
 
-    /// Rename an existing column from the [`Register::View`](`crate::vm::Register::View`) in register `index`.
+    /// Rename an existing column from the [`Register::Table`](`crate::vm::Register::Table`) in register `index`.
     RenameColumn {
         index: RegisterIndex,
         old_name: BoundedString,
         new_name: BoundedString,
     },
 
-    /// Start a new insertion into the [`Register::View`](`crate::vm::Register::View`) in register `view_index`.
+    /// Start a new insertion into the [`Register::Table`](`crate::vm::Register::Table`) in register `view_index`.
     ///
     /// A [`Register::InsertDef`](`crate::vm::Register::InsertDef`) is stored in register `index`.
     InsertDef {
@@ -223,7 +172,7 @@ pub enum Instruction {
     /// Add a value to the [`Register::InsertRow`](`crate::vm::Register::InsertRow`) in register `index`.
     AddValue {
         row_index: RegisterIndex,
-        expr_index: RegisterIndex,
+        expr: Expr,
     },
 
     /// Perform insertion defined in the [`Register::InsertRow`](`crate::vm::Register::InsertRow`) in register `index`.
@@ -231,19 +180,19 @@ pub enum Instruction {
     /// This represents an `INSERT INTO` statement.
     Insert { index: RegisterIndex },
 
-    /// Update values of the [`Register::View`](`crate::vm::Register::View`) in register `index`.
+    /// Update values of the [`Register::Table`](`crate::vm::Register::Table`) in register `index`.
     ///
     /// This represents an `UPDATE` statement.
     Update {
         index: RegisterIndex,
         /// Register where the column name is stored.
-        col_index: RegisterIndex,
-        expr_index: RegisterIndex,
+        col: Expr,
+        expr: Expr,
     },
 
-    /// Perform a union of the [`Register::View`](`crate::vm::Register::View`) in register `input1` and the [`Register::View`](`crate::vm::Register::View`) in register `input2`.
+    /// Perform a union of the [`Register::Table`](`crate::vm::Register::Table`) in register `input1` and the [`Register::Table`](`crate::vm::Register::Table`) in register `input2`.
     ///
-    /// The output is stored as a [`Register::View`](`crate::vm::Register::View`) in register
+    /// The output is stored as a [`Register::Table`](`crate::vm::Register::Table`) in register
     /// `output`.
     Union {
         input1: RegisterIndex,
@@ -251,18 +200,18 @@ pub enum Instruction {
         output: RegisterIndex,
     },
 
-    /// Perform a cartesian join of the [`Register::View`](`crate::vm::Register::View`) in register `input1` and the [`Register::View`](`crate::vm::Register::View`) in register `input2`.
+    /// Perform a cartesian join of the [`Register::Table`](`crate::vm::Register::Table`) in register `input1` and the [`Register::Table`](`crate::vm::Register::Table`) in register `input2`.
     ///
-    /// The output is stored as a [`Register::View`](`crate::vm::Register::View`) in register `output`.
+    /// The output is stored as a [`Register::Table`](`crate::vm::Register::Table`) in register `output`.
     CrossJoin {
         input1: RegisterIndex,
         input2: RegisterIndex,
         output: RegisterIndex,
     },
 
-    /// Perform a natural join of the [`Register::View`](`crate::vm::Register::View`) in register `input1` and the [`Register::View`](`crate::vm::Register::View`) in register `input2`.
+    /// Perform a natural join of the [`Register::Table`](`crate::vm::Register::Table`) in register `input1` and the [`Register::Table`](`crate::vm::Register::Table`) in register `input2`.
     ///
-    /// The output is stored as a [`Register::View`](`crate::vm::Register::View`) in register `output`.
+    /// The output is stored as a [`Register::Table`](`crate::vm::Register::Table`) in register `output`.
     ///
     /// Note: this is both a left and a right join i.e., there will be `NULL`s where the common
     /// columns do not match. The result must be filtered at a later stage.
@@ -279,7 +228,7 @@ mod test {
 
     use crate::{
         value,
-        vm::{BinOp, RegisterIndex},
+        vm::{BinOp, Expr, RegisterIndex},
     };
 
     use super::{Instruction::*, IntermediateCode};
@@ -297,372 +246,266 @@ mod test {
         };
 
         // `SELECT * FROM table1`
-        let view_index = RegisterIndex::default();
+        let table_index = RegisterIndex::default();
         let _ = IntermediateCode {
             instrs: vec![
                 Source {
-                    index: view_index,
+                    index: table_index,
                     name: "table1".into(),
                 },
-                Return { index: view_index },
+                Return { index: table_index },
             ],
         };
 
         // `SELECT * FROM table1 WHERE col1 = 1`
-        let view_index = RegisterIndex::default();
-        let temp_index_1 = view_index.next_index();
-        let temp_index_2 = temp_index_1.next_index();
+        let table_index = RegisterIndex::default();
         let _ = IntermediateCode {
             instrs: vec![
                 Source {
-                    index: view_index,
+                    index: table_index,
                     name: "table1".into(),
                 },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index,
-                    col_name: "col1".into(),
-                },
-                Value {
-                    index: temp_index_2,
-                    value: value::Value::Int64(1),
-                },
-                Binary {
-                    output: temp_index_1,
-                    input1: temp_index_1,
-                    operator: BinOp::Equal,
-                    input2: temp_index_2,
-                },
                 Filter {
-                    view_index: view_index,
-                    expr_index: temp_index_1,
+                    index: table_index,
+                    expr: Expr::Binary {
+                        left: Box::new(Expr::ColumnRef("col1".into())),
+                        op: BinOp::Equal,
+                        right: Box::new(Expr::Value(value::Value::Int64(1))),
+                    },
                 },
-                Return { index: view_index },
+                Return { index: table_index },
             ],
         };
 
         // `SELECT col2, col3 FROM table1 WHERE col1 = 1`
-        let view_index = RegisterIndex::default();
-        let temp_index_1 = view_index.next_index();
-        let temp_index_2 = temp_index_1.next_index();
+        let table_index = RegisterIndex::default();
+        let table_index_2 = table_index.next_index();
         let _ = IntermediateCode {
             instrs: vec![
                 Source {
-                    index: view_index,
+                    index: table_index,
                     name: "table1".into(),
                 },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index,
-                    col_name: "col1".into(),
-                },
-                Value {
-                    index: temp_index_2,
-                    value: value::Value::Int64(1),
-                },
-                Binary {
-                    output: temp_index_1,
-                    input1: temp_index_1,
-                    operator: BinOp::Equal,
-                    input2: temp_index_2,
-                },
                 Filter {
-                    view_index: view_index,
-                    expr_index: temp_index_1,
+                    index: table_index,
+                    expr: Expr::Binary {
+                        left: Box::new(Expr::ColumnRef("col1".into())),
+                        op: BinOp::Equal,
+                        right: Box::new(Expr::Value(value::Value::Int64(1))),
+                    },
                 },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index,
-                    col_name: "col2".into(),
-                },
-                Project {
-                    view_index: view_index,
-                    expr_index: temp_index_1,
-                    alias: None,
-                },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index,
-                    col_name: "col3".into(),
+                Empty {
+                    index: table_index_2,
                 },
                 Project {
-                    view_index: view_index,
-                    expr_index: temp_index_1,
+                    input: table_index,
+                    output: table_index_2,
+                    expr: Expr::ColumnRef("col2".into()),
                     alias: None,
                 },
-                Return { index: view_index },
+                Project {
+                    input: table_index,
+                    output: table_index_2,
+                    expr: Expr::ColumnRef("col3".into()),
+                    alias: None,
+                },
+                Return {
+                    index: table_index_2,
+                },
             ],
         };
 
         // `SELECT col2, col3 FROM main.table1 WHERE col1 = 1 ORDER BY col2 LIMIT 100`
-        let view_index = RegisterIndex::default();
-        let temp_index_1 = view_index.next_index();
-        let temp_index_2 = temp_index_1.next_index();
+        let table_index = RegisterIndex::default();
+        let table_index_2 = table_index.next_index();
         let _ = IntermediateCode {
             instrs: vec![
-                SourceFromSchema {
-                    index: view_index,
-                    schema_name: "main".into(),
+                Source {
+                    index: table_index,
                     name: "table1".into(),
                 },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index,
-                    col_name: "col1".into(),
-                },
-                Value {
-                    index: temp_index_2,
-                    value: value::Value::Int64(1),
-                },
-                Binary {
-                    output: temp_index_1,
-                    input1: temp_index_1,
-                    operator: BinOp::Equal,
-                    input2: temp_index_2,
-                },
                 Filter {
-                    view_index: view_index,
-                    expr_index: temp_index_1,
+                    index: table_index,
+                    expr: Expr::Binary {
+                        left: Box::new(Expr::ColumnRef("col1".into())),
+                        op: BinOp::Equal,
+                        right: Box::new(Expr::Value(value::Value::Int64(1))),
+                    },
                 },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index,
-                    col_name: "col2".into(),
-                },
-                Project {
-                    view_index: view_index,
-                    expr_index: temp_index_1,
-                    alias: None,
-                },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index,
-                    col_name: "col3".into(),
+                Empty {
+                    index: table_index_2,
                 },
                 Project {
-                    view_index: view_index,
-                    expr_index: temp_index_1,
+                    input: table_index,
+                    output: table_index_2,
+                    expr: Expr::ColumnRef("col2".into()),
                     alias: None,
                 },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index,
-                    col_name: "col2".into(),
+                Project {
+                    input: table_index,
+                    output: table_index_2,
+                    expr: Expr::ColumnRef("col3".into()),
+                    alias: None,
                 },
                 Order {
-                    view_index: view_index,
-                    expr_index: temp_index_1,
+                    index: table_index_2,
+                    expr: Expr::ColumnRef("col2".into()),
                     ascending: true,
                 },
                 Limit {
-                    index: view_index,
+                    index: table_index_2,
                     limit: 100,
                 },
-                Return { index: view_index },
+                Return {
+                    index: table_index_2,
+                },
             ],
         };
 
         // `SELECT col2, MAX(col3) AS max_col3 FROM table1 WHERE col1 = 1 GROUP BY col2 HAVING MAX(col3) > 10`
-        let view_index = RegisterIndex::default();
-        let temp_index_1 = view_index.next_index();
-        let temp_index_2 = temp_index_1.next_index();
+        let table_index = RegisterIndex::default();
+        let table_index_2 = table_index.next_index();
         let _ = IntermediateCode {
             instrs: vec![
-                SourceFromSchema {
-                    index: view_index,
-                    schema_name: "main".into(),
+                Source {
+                    index: table_index,
                     name: "table1".into(),
                 },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index,
-                    col_name: "col1".into(),
-                },
-                Value {
-                    index: temp_index_2,
-                    value: value::Value::Int64(1),
-                },
-                Binary {
-                    output: temp_index_1,
-                    input1: temp_index_1,
-                    operator: BinOp::Equal,
-                    input2: temp_index_2,
-                },
                 Filter {
-                    view_index: view_index,
-                    expr_index: temp_index_1,
-                },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index,
-                    col_name: "col2".into(),
+                    index: table_index,
+                    expr: Expr::Binary {
+                        left: Box::new(Expr::ColumnRef("col1".into())),
+                        op: BinOp::Equal,
+                        right: Box::new(Expr::Value(value::Value::Int64(1))),
+                    },
                 },
                 GroupBy {
-                    view_index: view_index,
-                    expr_index: temp_index_1,
+                    index: table_index,
+                    expr: Expr::ColumnRef("col2".into()),
                 },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index,
-                    col_name: "col2".into(),
+                Filter {
+                    index: table_index,
+                    expr: Expr::Binary {
+                        left: Box::new(Expr::Function {
+                            name: "MAX".into(),
+                            args: vec![Expr::ColumnRef("col3".into())],
+                        }),
+                        op: BinOp::GreaterThan,
+                        right: Box::new(Expr::Value(value::Value::Int64(10))),
+                    },
+                },
+                Empty {
+                    index: table_index_2,
                 },
                 Project {
-                    view_index: view_index,
-                    expr_index: temp_index_1,
+                    input: table_index,
+                    output: table_index_2,
+                    expr: Expr::ColumnRef("col2".into()),
                     alias: None,
                 },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index,
-                    col_name: "col3".into(),
-                },
-                Function {
-                    index: temp_index_2,
-                    name: "MAX".into(),
-                },
-                PushArg {
-                    fn_index: temp_index_2,
-                    arg_index: temp_index_1,
-                },
                 Project {
-                    view_index: view_index,
-                    expr_index: temp_index_2,
-                    alias: Some("max_col3".into()),
+                    input: table_index,
+                    output: table_index_2,
+                    expr: Expr::Function {
+                        name: "MAX".into(),
+                        args: vec![Expr::ColumnRef("col3".into())],
+                    },
+                    alias: None,
                 },
-                // TODO: having?
-                Return { index: view_index },
+                Return {
+                    index: table_index_2,
+                },
             ],
         };
 
         // `SELECT col2, col3 FROM table1 WHERE col1 = 1 AND col2 = 2`
-        let view_index = RegisterIndex::default();
-        let temp_index_1 = view_index.next_index();
-        let temp_index_2 = temp_index_1.next_index();
+        let table_index = RegisterIndex::default();
+        let table_index_2 = table_index.next_index();
         let _ = IntermediateCode {
             instrs: vec![
                 Source {
-                    index: view_index,
+                    index: table_index,
                     name: "table1".into(),
                 },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index,
-                    col_name: "col1".into(),
-                },
-                Value {
-                    index: temp_index_2,
-                    value: value::Value::Int64(1),
-                },
-                Binary {
-                    output: temp_index_1,
-                    input1: temp_index_1,
-                    operator: BinOp::Equal,
-                    input2: temp_index_2,
-                },
                 Filter {
-                    view_index: view_index,
-                    expr_index: temp_index_1,
+                    index: table_index,
+                    expr: Expr::Binary {
+                        left: Box::new(Expr::Binary {
+                            left: Box::new(Expr::ColumnRef("col1".into())),
+                            op: BinOp::Equal,
+                            right: Box::new(Expr::Value(value::Value::Int64(1))),
+                        }),
+                        op: BinOp::And,
+                        right: Box::new(Expr::Binary {
+                            left: Box::new(Expr::ColumnRef("col2".into())),
+                            op: BinOp::Equal,
+                            right: Box::new(Expr::Value(value::Value::Int64(2))),
+                        }),
+                    },
                 },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index,
-                    col_name: "col2".into(),
-                },
-                Value {
-                    index: temp_index_2,
-                    value: value::Value::Int64(2),
-                },
-                Binary {
-                    output: temp_index_1,
-                    input1: temp_index_1,
-                    operator: BinOp::Equal,
-                    input2: temp_index_2,
-                },
-                Filter {
-                    view_index: view_index,
-                    expr_index: temp_index_1,
-                },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index,
-                    col_name: "col2".into(),
+                Empty {
+                    index: table_index_2,
                 },
                 Project {
-                    view_index: view_index,
-                    expr_index: temp_index_1,
+                    input: table_index,
+                    output: table_index_2,
+                    expr: Expr::ColumnRef("col2".into()),
                     alias: None,
-                },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index,
-                    col_name: "col3".into(),
                 },
                 Project {
-                    view_index: view_index,
-                    expr_index: temp_index_1,
+                    input: table_index,
+                    output: table_index_2,
+                    expr: Expr::ColumnRef("col3".into()),
                     alias: None,
                 },
-                Return { index: view_index },
+                Return {
+                    index: table_index_2,
+                },
             ],
         };
 
         // `SELECT col2, col3 FROM table1 WHERE col1 = 1 OR col2 = 2`
-        let view_index = RegisterIndex::default();
-        let view_index_2 = view_index.next_index();
-        let view_index_3 = view_index_2.next_index();
-        let temp_index_1 = view_index_3.next_index();
-        let temp_index_2 = temp_index_1.next_index();
+        let table_index = RegisterIndex::default();
+        let table_index_2 = table_index.next_index();
         let _ = IntermediateCode {
             instrs: vec![
                 Source {
-                    index: view_index,
+                    index: table_index,
                     name: "table1".into(),
-                },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index,
-                    col_name: "col1".into(),
-                },
-                Value {
-                    index: temp_index_2,
-                    value: value::Value::Int64(1),
-                },
-                Binary {
-                    output: temp_index_1,
-                    input1: temp_index_1,
-                    operator: BinOp::Equal,
-                    input2: temp_index_2,
-                },
-                Source {
-                    index: view_index_2,
-                    name: "table1".into(),
-                },
-                Column {
-                    col_index: temp_index_1,
-                    view_index: view_index_2,
-                    col_name: "col2".into(),
-                },
-                Value {
-                    index: temp_index_2,
-                    value: value::Value::Int64(2),
-                },
-                Binary {
-                    output: temp_index_1,
-                    input1: temp_index_1,
-                    operator: BinOp::Equal,
-                    input2: temp_index_2,
                 },
                 Filter {
-                    view_index: view_index_2,
-                    expr_index: temp_index_1,
+                    index: table_index,
+                    expr: Expr::Binary {
+                        left: Box::new(Expr::Binary {
+                            left: Box::new(Expr::ColumnRef("col1".into())),
+                            op: BinOp::Equal,
+                            right: Box::new(Expr::Value(value::Value::Int64(1))),
+                        }),
+                        op: BinOp::Or,
+                        right: Box::new(Expr::Binary {
+                            left: Box::new(Expr::ColumnRef("col2".into())),
+                            op: BinOp::Equal,
+                            right: Box::new(Expr::Value(value::Value::Int64(2))),
+                        }),
+                    },
                 },
-                Union {
-                    input1: view_index,
-                    input2: view_index_2,
-                    output: view_index_3,
+                Empty {
+                    index: table_index_2,
+                },
+                Project {
+                    input: table_index,
+                    output: table_index_2,
+                    expr: Expr::ColumnRef("col2".into()),
+                    alias: None,
+                },
+                Project {
+                    input: table_index,
+                    output: table_index_2,
+                    expr: Expr::ColumnRef("col3".into()),
+                    alias: None,
                 },
                 Return {
-                    index: view_index_3,
+                    index: table_index_2,
                 },
             ],
         };
@@ -691,10 +534,7 @@ mod test {
         let col_index = table_index.next_index();
         let _ = IntermediateCode {
             instrs: vec![
-                TableDef {
-                    index: table_index,
-                    name: "table1".into(),
-                },
+                Empty { index: table_index },
                 ColumnDef {
                     index: col_index,
                     name: "col1".into(),
@@ -752,6 +592,7 @@ mod test {
                 },
                 NewTable {
                     index: table_index,
+                    name: "table1".into(),
                     exists_ok: true,
                 },
             ],
