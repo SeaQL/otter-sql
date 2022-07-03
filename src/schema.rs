@@ -1,13 +1,13 @@
-use crate::table::Table;
+use crate::{table::Table, BoundedString};
 
 /// A namespace in a database.
 pub struct Schema {
-    name: String,
+    name: BoundedString,
     tables: Vec<Table>,
 }
 
 impl Schema {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: BoundedString) -> Self {
         Self {
             name,
             tables: Vec::new(),
@@ -15,7 +15,7 @@ impl Schema {
     }
 
     /// The name of the schema.
-    pub fn name(&self) -> &String {
+    pub fn name(&self) -> &BoundedString {
         &self.name
     }
 
@@ -39,13 +39,13 @@ mod tests {
 
     #[test]
     fn create_schema() {
-        let mut schema = Schema::new("test".to_owned());
+        let mut schema = Schema::new("test".into());
         assert_eq!(schema.name(), "test");
         assert_eq!(schema.tables().len(), 0);
 
-        schema.add_table(Table::new("test".to_owned(), vec![]));
+        schema.add_table(Table::new("test".into(), vec![]));
         assert_eq!(schema.tables().len(), 1);
         assert_eq!(schema.tables()[0].name(), "test");
-        assert_eq!(schema.tables()[0].columns().len(), 0);
+        assert_eq!(schema.tables()[0].columns().collect::<Vec<_>>().len(), 0);
     }
 }

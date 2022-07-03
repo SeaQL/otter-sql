@@ -60,7 +60,7 @@ pub enum Register {
         grouped_col: Column,
         other_cols: Vec<Column>,
         /// The group, a mapping of grouped col value -> rows in that group.
-        data: Vec<(Value, Vec<Row>)>
+        data: Vec<(Value, Vec<Row>)>,
     },
     /// A table definition.
     TableDef(TableDef),

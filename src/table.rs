@@ -1,10 +1,10 @@
-use crate::{column::Column, value::Value};
+use crate::{column::Column, value::Value, BoundedString};
 
 /// A table in a database.
 ///
 /// Contains both the metadata and the actual data.
 pub struct Table {
-    name: String,
+    name: BoundedString,
     columns: Vec<Column>,
     /// The table's data.
     // TODO: provide methods that verify the data while adding
@@ -12,7 +12,7 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn new(name: String, columns: Vec<Column>) -> Self {
+    pub fn new(name: BoundedString, columns: Vec<Column>) -> Self {
         Self {
             name,
             columns,
@@ -21,13 +21,13 @@ impl Table {
     }
 
     /// The table's name.
-    pub fn name(&self) -> &String {
+    pub fn name(&self) -> &BoundedString {
         &self.name
     }
 
     /// The table's columns.
-    pub fn columns(&self) -> &Vec<Column> {
-        &self.columns
+    pub fn columns(&self) -> impl Iterator<Item = &Column> {
+        self.columns.iter().filter(|c| !c.is_internal())
     }
 
     /// Add a new column to the table.
@@ -53,11 +53,24 @@ mod tests {
 
     #[test]
     fn create_table() {
-        let mut table = Table::new("test".to_owned(), vec![]);
+        let mut table = Table::new("test".into(), vec![]);
         assert_eq!(table.name(), "test");
 
-        table = table.with_column(Column::new("col1".to_owned(), DataType::Int(None), vec![]));
-        assert_eq!(table.columns().len(), 1);
-        assert_eq!(table.columns()[0].name(), "col1");
+        table = table.with_column(Column::new(
+            "col1".into(),
+            DataType::Int(None),
+            vec![],
+            false,
+        ));
+
+        table = table.with_column(Column::new(
+            "col2".into(),
+            DataType::Int(None),
+            vec![],
+            true,
+        ));
+
+        assert_eq!(table.columns().collect::<Vec<_>>().len(), 1);
+        assert_eq!(table.columns().next().unwrap().name(), "col1");
     }
 }

@@ -1,22 +1,32 @@
 use sqlparser::ast::{ColumnOptionDef, DataType};
 
+use crate::BoundedString;
+
 /// A column's metadata.
 pub struct Column {
-    name: String,
+    name: BoundedString,
     data_type: DataType,
     options: Vec<ColumnOptionDef>,
+    /// Whether this is a hidden, internal column.
+    internal: bool,
 }
 
 impl Column {
-    pub fn new(name: String, data_type: DataType, options: Vec<ColumnOptionDef>) -> Self {
+    pub fn new(
+        name: BoundedString,
+        data_type: DataType,
+        options: Vec<ColumnOptionDef>,
+        internal: bool,
+    ) -> Self {
         Self {
             name,
             data_type,
             options,
+            internal,
         }
     }
 
-    pub fn name(&self) -> &String {
+    pub fn name(&self) -> &BoundedString {
         &self.name
     }
 
@@ -26,6 +36,10 @@ impl Column {
 
     pub fn options(&self) -> &Vec<ColumnOptionDef> {
         &self.options
+    }
+
+    pub fn is_internal(&self) -> bool {
+        self.internal
     }
 }
 
@@ -38,12 +52,13 @@ mod tests {
     #[test]
     fn create_column() {
         let column = Column::new(
-            "test".to_owned(),
+            "test".into(),
             DataType::Int(None),
             vec![ColumnOptionDef {
                 name: None,
                 option: ColumnOption::NotNull,
             }],
+            false,
         );
 
         assert_eq!(column.name(), "test");

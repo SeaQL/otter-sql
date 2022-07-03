@@ -185,7 +185,6 @@ pub enum Instruction {
     /// This represents an `UPDATE` statement.
     Update {
         index: RegisterIndex,
-        /// Register where the column name is stored.
         col: Expr,
         expr: Expr,
     },
