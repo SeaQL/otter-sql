@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::sync::RwLock;
 
 use crate::column::Column;
 use crate::ic::IntermediateCode;
-use crate::table::Row;
+use crate::table::{Row, Table};
 use crate::value::Value;
 use crate::{BoundedString, Mrc};
 
@@ -51,10 +52,7 @@ impl VirtualMachine {
 /// A register in the executor VM.
 pub enum Register {
     /// An entire table.
-    Table {
-        columns: Vec<Column>,
-        data: Vec<Row>,
-    },
+    Table(Mrc<RwLock<Table>>),
     /// A grouped table.
     GroupedTable {
         grouped_col: Column,

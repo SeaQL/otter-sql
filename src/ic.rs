@@ -918,6 +918,7 @@ mod test {
 
     #[test]
     fn insert_statements() {
+        // TODO
         // `INSERT INTO table1 VALUES (1, 'foo', 2)`
 
         // `INSERT INTO table1 (col1, col2) VALUES (1, 'foo')`
@@ -927,6 +928,7 @@ mod test {
 
     #[test]
     fn update_statements() {
+        // TODO
         // `UPDATE table1 SET col2 = 'bar' WHERE col1 = 1`
 
         // `UPDATE table1 SET col2 = 'bar' WHERE col1 = 1 AND col3 = 2`
