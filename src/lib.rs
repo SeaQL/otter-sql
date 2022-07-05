@@ -1,5 +1,6 @@
 mod column;
 mod database;
+mod expr;
 mod ic;
 mod schema;
 mod table;

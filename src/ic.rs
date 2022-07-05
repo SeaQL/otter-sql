@@ -1,10 +1,6 @@
 use sqlparser::ast::{ColumnOptionDef, DataType};
 
-use crate::{
-    value::Value,
-    vm::{Expr, RegisterIndex},
-    BoundedString,
-};
+use crate::{expr::Expr, value::Value, vm::RegisterIndex, BoundedString};
 
 /// The intermediate representation of a query.
 pub struct IntermediateCode {
@@ -226,9 +222,10 @@ mod test {
     use sqlparser::ast::{ColumnOption, ColumnOptionDef, DataType};
 
     use crate::{
+        expr::{BinOp, Expr, UnOp},
         table::TABLE_UNIQUE_KEY_NAME,
         value,
-        vm::{BinOp, Expr, RegisterIndex, UnOp},
+        vm::RegisterIndex,
     };
 
     use super::{Instruction::*, IntermediateCode};
