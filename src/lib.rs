@@ -1,7 +1,9 @@
+mod codegen;
 mod column;
 mod database;
 mod expr;
 mod ic;
+mod parser;
 mod schema;
 mod table;
 mod value;
