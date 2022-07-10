@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::sync::RwLock;
 
 use crate::column::Column;
 use crate::ic::IntermediateCode;
@@ -25,21 +24,54 @@ impl Display for RegisterIndex {
     }
 }
 
+/// An index that can be used as a reference to a table.
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct TableIndex(usize);
+
+impl TableIndex {
+    /// Get the next index in the sequence.
+    pub fn next_index(&self) -> Self {
+        TableIndex(self.0 + 1)
+    }
+}
+
 /// Executor of an SQL query.
 #[derive(Default)]
 pub struct VirtualMachine {
     registers: HashMap<RegisterIndex, Register>,
+    tables: HashMap<TableIndex, Table>,
+    last_table_index: TableIndex,
 }
 
 impl VirtualMachine {
     /// Inserts a value for the register at the given index.
-    pub fn insert(&mut self, index: RegisterIndex, reg: Register) {
+    pub fn insert_register(&mut self, index: RegisterIndex, reg: Register) {
         self.registers.insert(index.clone(), reg);
     }
 
     /// Gets the value for the register at the given index.
-    pub fn get(&mut self, index: &RegisterIndex) -> Option<&Register> {
+    pub fn get_register(&mut self, index: &RegisterIndex) -> Option<&Register> {
         self.registers.get(index)
+    }
+
+    /// Creates a new table with a temp name and returns its index.
+    pub fn new_temp_table(&mut self) -> TableIndex {
+        let index = self.last_table_index.next_index();
+        self.tables.insert(index, Table::new_temp(index.0));
+        index
+    }
+
+    /// Get a reference to an existing table at the given index.
+    pub fn table(&self, index: &TableIndex) -> Option<&Table> {
+        self.tables.get(index)
+    }
+
+    /// Drop an existing table from the VM.
+    ///
+    /// Note: does NOT remove the table from the schema (if it was added to a schema).
+    // TODO: ensure that IC gen calls this when a temp table is created.
+    pub fn drop_table(&mut self, index: &TableIndex) {
+        self.tables.remove(index);
     }
 
     /// Executes the given intermediate code.
@@ -51,8 +83,8 @@ impl VirtualMachine {
 
 /// A register in the executor VM.
 pub enum Register {
-    /// An entire table.
-    Table(Mrc<RwLock<Table>>),
+    /// A reference to a table.
+    TableRef(TableIndex),
     /// A grouped table.
     GroupedTable {
         grouped_col: Column,

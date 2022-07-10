@@ -2,7 +2,9 @@ use sqlparser::ast::{ColumnOption, ColumnOptionDef, DataType};
 
 use crate::{column::Column, value::Value, BoundedString};
 
-pub const TABLE_UNIQUE_KEY_NAME: &str = "__unique_key";
+pub const TABLE_UNIQUE_KEY_NAME: &str = "__otter_unique_key";
+
+pub const TABLE_TEMPORARY_NAME: &str = "__otter_temporary_table";
 
 /// A table in a database.
 ///
@@ -35,6 +37,13 @@ impl Table {
             data: Vec::new(),
             row_id: 0,
         }
+    }
+
+    pub fn new_temp(num: usize) -> Self {
+        Self::new(
+            format!("{}_{}", TABLE_TEMPORARY_NAME, num).as_str().into(),
+            Vec::new(),
+        )
     }
 
     pub fn new_row(&mut self, mut data: Vec<Value>) {
@@ -76,9 +85,12 @@ impl Table {
 
     /// Add a new column to the table.
     // TODO: does not add the column data to the rows.
-    pub fn with_column(mut self, column: Column) -> Self {
+    pub fn add_column(&mut self, column: Column) {
         self.columns.push(column);
-        self
+    }
+
+    pub fn rename(&mut self, new_name: BoundedString) {
+        self.name = new_name;
     }
 }
 
@@ -101,14 +113,14 @@ mod tests {
         let mut table = Table::new("test".into(), vec![]);
         assert_eq!(table.name(), "test");
 
-        table = table.with_column(Column::new(
+        table.add_column(Column::new(
             "col1".into(),
             DataType::Int(None),
             vec![],
             false,
         ));
 
-        table = table.with_column(Column::new(
+        table.add_column(Column::new(
             "col2".into(),
             DataType::Int(None),
             vec![],
