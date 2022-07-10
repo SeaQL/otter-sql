@@ -122,12 +122,19 @@ pub enum Instruction {
 
     /// Create table from the [`Register::TableRef](`crate::vm::Register::TableRef) in register `index`.
     ///
+    /// Creation implies that the table is added to the schema.
+    ///
     /// This represents a `CREATE TABLE [IF NOT EXISTS]` statement.
     NewTable {
         index: RegisterIndex,
         name: BoundedString,
         /// If `true`, the table is not created if it exists and no error is returned.
         exists_ok: bool,
+    },
+
+    /// Drop the table referenced by the [`Register::TableRef`](`crate::vm::Register::TableRef`) in register `index`.
+    DropTable {
+        index: RegisterIndex,
     },
 
     /// Remove the given column from the [`Register::TableRef](`crate::vm::Register::TableRef) in register `index`.
