@@ -1,9 +1,11 @@
 /// A value contained within a table's cell.
 ///
 /// One or more column types may be mapped to a single variant of [`Value`].
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Value {
     Null,
+
+    Bool(bool),
 
     // integer types
     // reference: https://dev.mysql.com/doc/refman/8.0/en/integer-types.html
