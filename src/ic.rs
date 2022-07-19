@@ -93,7 +93,8 @@ pub enum Instruction {
     ///
     /// This represents a `CREATE SCHEMA [IF NOT EXISTS]` statement.
     NewSchema {
-        name: BoundedString,
+        db_name: Option<BoundedString>,
+        schema_name: BoundedString,
         /// If `true`, the schema is not created if it exists and no error is returned.
         exists_ok: bool,
     },
@@ -532,7 +533,8 @@ mod test {
         // `CREATE SCHEMA schema1`
         let _ = IntermediateCode {
             instrs: vec![NewSchema {
-                name: "schema1".into(),
+                db_name: Some("db1".into()),
+                schema_name: "schema1".into(),
                 exists_ok: false,
             }],
         };
