@@ -1,11 +1,15 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 
+use sqlparser::parser::ParserError;
+
+use crate::codegen::{codegen, CodegenError};
 use crate::column::Column;
-use crate::ic::IntermediateCode;
+use crate::ic::{Instruction, IntermediateCode};
+use crate::parser::parse;
 use crate::table::{Row, Table};
 use crate::value::Value;
-use crate::{BoundedString, Mrc};
+use crate::{BoundedString, Database, Mrc};
 
 /// An index that can be used to access a specific register.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -38,6 +42,7 @@ impl TableIndex {
 /// Executor of an SQL query.
 #[derive(Default)]
 pub struct VirtualMachine {
+    databases: HashMap<String, Database>,
     registers: HashMap<RegisterIndex, Register>,
     tables: HashMap<TableIndex, Table>,
     last_table_index: TableIndex,
@@ -74,10 +79,30 @@ impl VirtualMachine {
         self.tables.remove(index);
     }
 
+    /// Executes the given SQL.
+    // TODO: fix return type
+    pub fn execute(&mut self, code: &str) -> Result<(), ExecutionError> {
+        let ast = parse(code)?;
+        for stmt in ast {
+            let ic = codegen(&stmt)?;
+            self.execute_ic(&ic)?;
+        }
+        Ok(())
+    }
+
     /// Executes the given intermediate code.
-    pub fn execute(&mut self, _code: &IntermediateCode) {
-        // TODO
-        todo!();
+    // TODO: fix return type
+    fn execute_ic(&mut self, ic: &IntermediateCode) -> Result<(), ExecutionError> {
+        for instr in &ic.instrs {
+            self.execute_instr(instr)?;
+        }
+        Ok(())
+    }
+
+    /// Executes the given instruction.
+    // TODO: fix return type
+    fn execute_instr(&mut self, _instr: &Instruction) -> Result<(), ExecutionError> {
+        todo!()
     }
 }
 
@@ -137,6 +162,23 @@ pub struct InsertRow {
     pub values: Vec<Value>,
     /// The insert definition which this belongs to
     pub def: Mrc<InsertDef>,
+}
+
+pub enum ExecutionError {
+    ParseError(ParserError),
+    CodegenError(CodegenError),
+}
+
+impl From<ParserError> for ExecutionError {
+    fn from(err: ParserError) -> Self {
+        ExecutionError::ParseError(err)
+    }
+}
+
+impl From<CodegenError> for ExecutionError {
+    fn from(err: CodegenError) -> Self {
+        ExecutionError::CodegenError(err)
+    }
 }
 
 #[cfg(test)]

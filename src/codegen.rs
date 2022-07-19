@@ -6,7 +6,7 @@ use std::{error::Error, fmt::Display};
 use crate::ic::{Instruction, IntermediateCode};
 
 /// Generates intermediate code from the AST.
-fn codegen(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
+pub fn codegen(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
     let mut instrs = Vec::<Instruction>::new();
 
     match ast {
@@ -62,7 +62,7 @@ fn codegen(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
 }
 
 #[derive(Debug)]
-enum CodegenError {
+pub enum CodegenError {
     UnsupportedStatement(String),
     InvalidIdentifier { ident: String, reason: &'static str },
 }
