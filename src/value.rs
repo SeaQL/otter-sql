@@ -1,3 +1,7 @@
+use std::fmt::Display;
+
+use sqlparser::ast;
+
 /// A value contained within a table's cell.
 ///
 /// One or more column types may be mapped to a single variant of [`Value`].
@@ -41,6 +45,48 @@ pub enum Value {
     String(String),
 
     Binary(Vec<u8>),
+}
+
+impl TryFrom<ast::Value> for Value {
+    type Error = ValueError;
+
+    fn try_from(val: ast::Value) -> Result<Self, Self::Error> {
+        match val {
+            ast::Value::Null => Ok(Value::Null),
+            ast::Value::Boolean(b) => Ok(Value::Bool(b)),
+            ast::Value::SingleQuotedString(s) => Ok(Value::String(s)),
+            ast::Value::DoubleQuotedString(s) => Ok(Value::String(s)),
+            ast::Value::Number(ref s, _long) => {
+                if let Ok(int) = s.parse::<i64>() {
+                    Ok(Value::Int64(int))
+                } else {
+                    if let Ok(float) = s.parse::<f64>() {
+                        Ok(Value::Float64(float))
+                    } else {
+                        Err(ValueError {
+                            reason: "Unsupported number format",
+                            value: val.clone(),
+                        })
+                    }
+                }
+            }
+            _ => Err(ValueError {
+                reason: "Unsupported value format",
+                value: val,
+            }),
+        }
+    }
+}
+
+pub struct ValueError {
+    pub reason: &'static str,
+    pub value: ast::Value,
+}
+
+impl Display for ValueError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}: {}", self.reason, self.value)
+    }
 }
 
 #[cfg(test)]
