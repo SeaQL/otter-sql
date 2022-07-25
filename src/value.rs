@@ -78,6 +78,7 @@ impl TryFrom<ast::Value> for Value {
     }
 }
 
+#[derive(Debug)]
 pub struct ValueError {
     pub reason: &'static str,
     pub value: ast::Value,
@@ -85,7 +86,7 @@ pub struct ValueError {
 
 impl Display for ValueError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}: {}", self.reason, self.value)
+        write!(f, "ValueError: {}: {}", self.reason, self.value)
     }
 }
 
