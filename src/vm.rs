@@ -11,6 +11,8 @@ use crate::table::{Row, Table};
 use crate::value::Value;
 use crate::{BoundedString, Database, Mrc};
 
+const DEFAULT_DATABASE_NAME: &str = "default";
+
 /// An index that can be used to access a specific register.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct RegisterIndex(usize);
@@ -40,15 +42,23 @@ impl TableIndex {
 }
 
 /// Executor of an SQL query.
-#[derive(Default)]
 pub struct VirtualMachine {
-    databases: HashMap<String, Database>,
+    database: Database,
     registers: HashMap<RegisterIndex, Register>,
     tables: HashMap<TableIndex, Table>,
     last_table_index: TableIndex,
 }
 
 impl VirtualMachine {
+    pub fn new(name: BoundedString) -> Self {
+        Self {
+            database: Database::new(name),
+            registers: Default::default(),
+            tables: Default::default(),
+            last_table_index: Default::default(),
+        }
+    }
+
     /// Inserts a value for the register at the given index.
     pub fn insert_register(&mut self, index: RegisterIndex, reg: Register) {
         self.registers.insert(index.clone(), reg);
@@ -102,7 +112,14 @@ impl VirtualMachine {
     /// Executes the given instruction.
     // TODO: fix return type
     fn execute_instr(&mut self, _instr: &Instruction) -> Result<(), ExecutionError> {
+        let _ = &self.database;
         todo!()
+    }
+}
+
+impl Default for VirtualMachine {
+    fn default() -> Self {
+        Self::new(DEFAULT_DATABASE_NAME.into())
     }
 }
 

@@ -11,25 +11,6 @@ pub fn codegen(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
 
     match ast {
         Statement::Query(query) => todo!(),
-        Statement::CreateDatabase {
-            db_name,
-            if_not_exists,
-            location: _,
-            managed_location: _,
-        } => {
-            if db_name.0.len() > 1 {
-                Err(CodegenError::InvalidIdentifier {
-                    ident: db_name.to_string(),
-                    reason: "Database name must consist of only one part.",
-                })
-            } else {
-                instrs.push(Instruction::NewDatabase {
-                    name: db_name.0[0].value.as_str().into(),
-                    exists_ok: *if_not_exists,
-                });
-                Ok(())
-            }
-        }
         Statement::CreateSchema {
             schema_name,
             if_not_exists,

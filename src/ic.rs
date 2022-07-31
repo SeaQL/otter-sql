@@ -80,15 +80,6 @@ pub enum Instruction {
     /// See [`Register`](`crate::vm::Register`) for more information.
     Return { index: RegisterIndex },
 
-    /// Create a new database.
-    ///
-    /// This represents a `CREATE DATABASE [IF NOT EXISTS]` statement.
-    NewDatabase {
-        name: BoundedString,
-        /// If `true`, the database is not created if it exists and no error is returned.
-        exists_ok: bool,
-    },
-
     /// Create a new schema.
     ///
     /// This represents a `CREATE SCHEMA [IF NOT EXISTS]` statement.
