@@ -7,13 +7,13 @@ use crate::{
     BoundedString,
 };
 
-use sqlparser::ast;
+use sqlparser::ast::{self, ObjectName};
 
 /// An expression
 #[derive(Debug, Clone)]
 pub enum Expr {
     Value(Value),
-    ColumnRef(BoundedString),
+    ColumnRef(ObjectName),
     Wildcard,
     Binary {
         left: Box<Expr>,
@@ -66,8 +66,8 @@ impl TryFrom<ast::Expr> for Expr {
     type Error = ExprError;
     fn try_from(value: ast::Expr) -> Result<Self, Self::Error> {
         match value {
-            ast::Expr::Identifier(i) => todo!(),
-            ast::Expr::CompoundIdentifier(i) => todo!(),
+            ast::Expr::Identifier(i) => Ok(Expr::ColumnRef(ObjectName(vec![i]))),
+            ast::Expr::CompoundIdentifier(i) => Ok(Expr::ColumnRef(ObjectName(i))),
             ast::Expr::IsFalse(e) => Ok(Expr::Unary {
                 op: UnOp::IsFalse,
                 operand: Box::new((*e).try_into()?),
