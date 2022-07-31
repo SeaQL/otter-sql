@@ -79,3 +79,70 @@ impl Display for CodegenError {
 }
 
 impl Error for CodegenError {}
+
+#[cfg(test)]
+mod tests {
+    use crate::{codegen::codegen, ic::Instruction, parser::parse};
+
+    fn check_single_statement(
+        query: &str,
+        callback: impl Fn(&[Instruction]) -> bool,
+    ) -> Result<(), String> {
+        let parsed = parse(query).unwrap();
+        assert_eq!(parsed.len(), 1);
+
+        let statement = &parsed[0];
+        let ic = codegen(&statement).unwrap();
+        if !callback(ic.instrs.as_slice()) {
+            Err(format!("Instructions did not match: {:?}", ic.instrs))
+        } else {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn create_schema() {
+        check_single_statement("CREATE SCHEMA abc", |instrs| match instrs {
+            &[Instruction::NewSchema {
+                db_name: None,
+                schema_name,
+                exists_ok: false,
+            }] => {
+                assert_eq!(schema_name.as_str(), "abc");
+                true
+            }
+            _ => false,
+        })
+        .unwrap();
+
+        check_single_statement("CREATE SCHEMA IF NOT EXISTS abc", |instrs| match instrs {
+            &[Instruction::NewSchema {
+                db_name: None,
+                schema_name,
+                exists_ok: true,
+            }] => {
+                assert_eq!(schema_name.as_str(), "abc");
+                true
+            }
+            _ => false,
+        })
+        .unwrap();
+
+        check_single_statement(
+            "CREATE SCHEMA IF NOT EXISTS db1.abc",
+            |instrs| match instrs {
+                &[Instruction::NewSchema {
+                    db_name: Some(db_name),
+                    schema_name,
+                    exists_ok: true,
+                }] => {
+                    assert_eq!(db_name.as_str(), "db1");
+                    assert_eq!(schema_name.as_str(), "abc");
+                    true
+                }
+                _ => false,
+            },
+        )
+        .unwrap();
+    }
+}
