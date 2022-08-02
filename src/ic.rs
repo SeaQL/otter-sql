@@ -130,9 +130,7 @@ pub enum Instruction {
     },
 
     /// Drop the table referenced by the [`Register::TableRef`](`crate::vm::Register::TableRef`) in register `index`.
-    DropTable {
-        index: RegisterIndex,
-    },
+    DropTable { index: RegisterIndex },
 
     /// Remove the given column from the [`Register::TableRef](`crate::vm::Register::TableRef) in register `index`.
     RemoveColumn {

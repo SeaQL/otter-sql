@@ -1,7 +1,6 @@
 /// SQL parsing.
 ///
 /// Makes use of [`sqlparser`].
-
 use sqlparser::ast::Statement;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::{Parser, ParserError};

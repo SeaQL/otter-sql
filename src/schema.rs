@@ -1,4 +1,4 @@
-use crate::{BoundedString, vm::TableIndex};
+use crate::{vm::TableIndex, BoundedString};
 
 /// A namespace in a database.
 ///
