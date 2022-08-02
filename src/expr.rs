@@ -2,18 +2,19 @@
 
 use std::{error::Error, fmt::Display};
 
+use sqlparser::ast;
+
 use crate::{
+    identifier::{ColumnRef, IdentifierError},
     value::{Value, ValueError},
     BoundedString,
 };
-
-use sqlparser::ast::{self, ObjectName};
 
 /// An expression
 #[derive(Debug, Clone)]
 pub enum Expr {
     Value(Value),
-    ColumnRef(ObjectName),
+    ColumnRef(ColumnRef),
     Wildcard,
     Binary {
         left: Box<Expr>,
@@ -66,8 +67,8 @@ impl TryFrom<ast::Expr> for Expr {
     type Error = ExprError;
     fn try_from(value: ast::Expr) -> Result<Self, Self::Error> {
         match value {
-            ast::Expr::Identifier(i) => Ok(Expr::ColumnRef(ObjectName(vec![i]))),
-            ast::Expr::CompoundIdentifier(i) => Ok(Expr::ColumnRef(ObjectName(i))),
+            ast::Expr::Identifier(i) => Ok(Expr::ColumnRef(vec![i].try_into()?)),
+            ast::Expr::CompoundIdentifier(i) => Ok(Expr::ColumnRef(i.try_into()?)),
             ast::Expr::IsFalse(e) => Ok(Expr::Unary {
                 op: UnOp::IsFalse,
                 operand: Box::new((*e).try_into()?),
@@ -214,6 +215,7 @@ pub enum ExprError {
         op: ast::UnaryOperator,
     },
     Value(ValueError),
+    Identifier(IdentifierError),
 }
 
 impl Display for ExprError {
@@ -229,6 +231,7 @@ impl Display for ExprError {
                 write!(f, "ExprError: {}: {}", reason, op)
             }
             ExprError::Value(v) => write!(f, "{}", v),
+            ExprError::Identifier(v) => write!(f, "{}", v),
         }
     }
 }
@@ -236,6 +239,12 @@ impl Display for ExprError {
 impl From<ValueError> for ExprError {
     fn from(v: ValueError) -> Self {
         Self::Value(v)
+    }
+}
+
+impl From<IdentifierError> for ExprError {
+    fn from(i: IdentifierError) -> Self {
+        Self::Identifier(i)
     }
 }
 

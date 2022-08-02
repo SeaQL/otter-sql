@@ -1,6 +1,12 @@
 use sqlparser::ast::{ColumnOptionDef, DataType};
 
-use crate::{expr::Expr, value::Value, vm::RegisterIndex, BoundedString};
+use crate::{
+    expr::Expr,
+    identifier::{SchemaRef, TableRef},
+    value::Value,
+    vm::RegisterIndex,
+    BoundedString,
+};
 
 /// The intermediate representation of a query.
 pub struct IntermediateCode {
@@ -19,7 +25,7 @@ pub enum Instruction {
     /// given register.
     Source {
         index: RegisterIndex,
-        name: BoundedString,
+        name: TableRef,
     },
 
     /// Load an *existing* table given by `name` from the schema `schema_name`.
@@ -28,7 +34,7 @@ pub enum Instruction {
     /// given register.
     SourceFromSchema {
         index: RegisterIndex,
-        schema_name: BoundedString,
+        schema_name: SchemaRef,
         name: BoundedString,
     },
 
@@ -84,8 +90,7 @@ pub enum Instruction {
     ///
     /// This represents a `CREATE SCHEMA [IF NOT EXISTS]` statement.
     NewSchema {
-        db_name: Option<BoundedString>,
-        schema_name: BoundedString,
+        schema_name: SchemaRef,
         /// If `true`, the schema is not created if it exists and no error is returned.
         exists_ok: bool,
     },
@@ -119,7 +124,7 @@ pub enum Instruction {
     /// This represents a `CREATE TABLE [IF NOT EXISTS]` statement.
     NewTable {
         index: RegisterIndex,
-        name: BoundedString,
+        name: TableRef,
         /// If `true`, the table is not created if it exists and no error is returned.
         exists_ok: bool,
     },
