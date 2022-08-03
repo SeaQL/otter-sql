@@ -59,7 +59,7 @@ impl TryFrom<Vec<Ident>> for TableRef {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ColumnRef {
     pub schema_name: Option<BoundedString>,
     pub table_name: Option<BoundedString>,

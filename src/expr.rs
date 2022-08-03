@@ -11,7 +11,7 @@ use crate::{
 };
 
 /// An expression
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Value(Value),
     ColumnRef(ColumnRef),
@@ -32,7 +32,7 @@ pub enum Expr {
 }
 
 /// A binary operator
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum BinOp {
     Plus,
     Minus,
@@ -52,7 +52,7 @@ pub enum BinOp {
 }
 
 /// A unary operator
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum UnOp {
     Plus,
     Minus,
