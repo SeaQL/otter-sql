@@ -19,6 +19,9 @@ pub enum Instruction {
     /// Load a [`Value`] into a register.
     Value { index: RegisterIndex, value: Value },
 
+    /// Load a [`Expr`] into a register.
+    Expr { index: RegisterIndex, expr: Expr },
+
     /// Load an *existing* table given by `name`.
     ///
     /// This will result in a [`Register::TableRef](`crate::vm::Register::TableRef) being stored at the

@@ -1,12 +1,13 @@
 /// Intermediate code generation from the AST.
-use sqlparser::ast::{self, Statement};
+use sqlparser::ast::{self, SelectItem, SetExpr, Statement, TableFactor, TableWithJoins};
 
 use std::{error::Error, fmt::Display};
 
 use crate::{
-    expr::ExprError,
+    expr::{Expr, ExprError},
     ic::{Instruction, IntermediateCode},
     identifier::IdentifierError,
+    value::{Value, ValueError},
     vm::RegisterIndex,
 };
 
@@ -17,7 +18,6 @@ pub fn codegen(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
     let mut current_reg = RegisterIndex::default();
 
     match ast {
-        Statement::Query(query) => todo!(),
         Statement::CreateTable {
             // TODO: support `OR REPLACE`
             or_replace: _,
@@ -148,6 +148,225 @@ pub fn codegen(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
 
             Ok(())
         }
+        Statement::Query(query) => {
+            // TODO: support CTEs
+            let mut table_reg_index = current_reg;
+            current_reg = current_reg.next_index();
+
+            match &query.body {
+                SetExpr::Select(select) => {
+                    match select.from.as_slice() {
+                        [TableWithJoins { relation, joins }] => {
+                            if !joins.is_empty() {
+                                // TODO: joins
+                                return Err(CodegenError::UnsupportedStatementForm(
+                                    "Joins are not supported yet",
+                                    select.to_string(),
+                                ));
+                            }
+
+                            match relation {
+                                TableFactor::Table {
+                                    name,
+                                    // TODO: support table alias
+                                    alias: _,
+                                    args: _,
+                                    with_hints: _,
+                                } => instrs.push(Instruction::Source {
+                                    index: table_reg_index,
+                                    name: name.0.clone().try_into()?,
+                                }),
+                                TableFactor::Derived { .. } => {
+                                    // TODO: support tables derived from a query
+                                    return Err(CodegenError::UnsupportedStatementForm(
+                                        "Derived tables are not supportd yet",
+                                        relation.to_string(),
+                                    ));
+                                }
+                                TableFactor::NestedJoin(_) => {
+                                    // TODO: support nested joins
+                                    return Err(CodegenError::UnsupportedStatementForm(
+                                        "Nested JOINs are not supportd yet",
+                                        relation.to_string(),
+                                    ));
+                                }
+                                TableFactor::TableFunction { .. } => {
+                                    // no plans to support these yet
+                                    return Err(CodegenError::UnsupportedStatementForm(
+                                        "Table functions are not supportd yet",
+                                        relation.to_string(),
+                                    ));
+                                }
+                                TableFactor::UNNEST { .. } => {
+                                    // no plans to support these yet
+                                    return Err(CodegenError::UnsupportedStatementForm(
+                                        "UNNEST are not supportd yet",
+                                        relation.to_string(),
+                                    ));
+                                }
+                            }
+                        }
+                        _ => {
+                            // TODO: multiple tables
+                            return Err(CodegenError::UnsupportedStatementForm(
+                                "Only select from a single table is supported for now",
+                                select.to_string(),
+                            ));
+                        }
+                    }
+
+                    if let Some(expr) = select.selection.clone() {
+                        instrs.push(Instruction::Filter {
+                            index: table_reg_index,
+                            expr: expr.try_into()?,
+                        })
+                    }
+
+                    for group_by in select.group_by.clone() {
+                        instrs.push(Instruction::GroupBy {
+                            index: table_reg_index,
+                            expr: group_by.try_into()?,
+                        });
+                    }
+
+                    if let Some(expr) = select.having.clone() {
+                        instrs.push(Instruction::Filter {
+                            index: table_reg_index,
+                            expr: expr.try_into()?,
+                        })
+                    }
+
+                    if !select.projection.is_empty() {
+                        let original_table_reg_index = table_reg_index;
+                        let table_reg_index = current_reg;
+                        current_reg = current_reg.next_index();
+
+                        instrs.push(Instruction::Empty {
+                            index: table_reg_index,
+                        });
+
+                        for projection in select.projection.clone() {
+                            instrs.push(Instruction::Project {
+                                input: original_table_reg_index,
+                                output: table_reg_index,
+                                expr: match projection {
+                                    SelectItem::UnnamedExpr(ref expr) => expr.clone().try_into()?,
+                                    SelectItem::ExprWithAlias { ref expr, .. } => {
+                                        expr.clone().try_into()?
+                                    }
+                                    SelectItem::QualifiedWildcard(_) => Expr::Wildcard,
+                                    SelectItem::Wildcard => Expr::Wildcard,
+                                },
+                                alias: match projection {
+                                    SelectItem::UnnamedExpr(_) => None,
+                                    SelectItem::ExprWithAlias { alias, .. } => {
+                                        Some(alias.value.as_str().into())
+                                    }
+                                    SelectItem::QualifiedWildcard(name) => {
+                                        return Err(CodegenError::UnsupportedStatementForm(
+                                            "Qualified wildcards are not supported yet",
+                                            name.to_string(),
+                                        ))
+                                    }
+                                    SelectItem::Wildcard => None,
+                                },
+                            })
+                        }
+
+                        if select.distinct {
+                            return Err(CodegenError::UnsupportedStatementForm(
+                                "DISTINCT is not supported yet",
+                                select.to_string(),
+                            ));
+                        }
+                    }
+                }
+                SetExpr::Values(exprs) => {
+                    if exprs.0.len() == 1 && exprs.0[0].len() == 1 {
+                        let expr: Expr = exprs.0[0][0].clone().try_into()?;
+                        instrs.push(Instruction::Expr {
+                            index: table_reg_index,
+                            expr,
+                        });
+                    } else {
+                        // TODO: selecting multiple values.
+                        //       the problem here is creating a temp table
+                        //       without information about column names
+                        //       and (more importantly) types.
+                        return Err(CodegenError::UnsupportedStatementForm(
+                            "Selecting more than one value is not supported yet",
+                            exprs.to_string(),
+                        ));
+                    }
+                }
+                SetExpr::Query(query) => {
+                    // TODO: figure out what syntax this corresponds to
+                    //       and implement it if necessary
+                    return Err(CodegenError::UnsupportedStatementForm(
+                        "Query within a query not supported yet",
+                        query.to_string(),
+                    ));
+                }
+                SetExpr::SetOperation {
+                    op: _,
+                    all: _,
+                    left: _,
+                    right: _,
+                } => {
+                    // TODO: set operations
+                    return Err(CodegenError::UnsupportedStatementForm(
+                        "Set operations are not supported yet",
+                        query.to_string(),
+                    ));
+                }
+                SetExpr::Insert(insert) => {
+                    // TODO: figure out what syntax this corresponds to
+                    //       and implement it if necessary
+                    return Err(CodegenError::UnsupportedStatementForm(
+                        "Insert within query not supported yet",
+                        insert.to_string(),
+                    ));
+                }
+            };
+
+            if let Some(limit) = query.limit.clone() {
+                if let ast::Expr::Value(val) = limit.clone() {
+                    if let Value::Int64(limit) = val.clone().try_into()? {
+                        instrs.push(Instruction::Limit {
+                            index: table_reg_index,
+                            limit: limit as u64,
+                        });
+                    } else {
+                        // TODO: what are non constant limits anyway?
+                        return Err(CodegenError::Expr(ExprError::Value(ValueError {
+                            reason: "Only constant integer LIMITs are supported",
+                            value: val,
+                        })));
+                    }
+                } else {
+                    // TODO: what are non constant limits anyway?
+                    return Err(CodegenError::Expr(ExprError::Expr {
+                        reason: "Only constant integer LIMITs are supported",
+                        expr: limit,
+                    }));
+                }
+            }
+
+            for order_by in query.order_by.clone() {
+                instrs.push(Instruction::Order {
+                    index: table_reg_index,
+                    expr: order_by.expr.try_into()?,
+                    ascending: order_by.asc.unwrap_or(true),
+                });
+                // TODO: support NULLS FIRST/NULLS LAST
+            }
+
+            instrs.push(Instruction::Return {
+                index: table_reg_index,
+            });
+
+            Ok(())
+        }
         Statement::CreateSchema {
             schema_name,
             if_not_exists,
@@ -196,6 +415,12 @@ impl From<IdentifierError> for CodegenError {
 impl From<ExprError> for CodegenError {
     fn from(e: ExprError) -> Self {
         CodegenError::Expr(e)
+    }
+}
+
+impl From<ValueError> for CodegenError {
+    fn from(v: ValueError) -> Self {
+        CodegenError::Expr(v.into())
     }
 }
 
