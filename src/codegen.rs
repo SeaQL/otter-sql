@@ -725,5 +725,433 @@ mod tests {
                 ]
             )
         });
+
+        check_single_statement("SELECT * FROM table1", |instrs| {
+            assert_eq!(
+                instrs,
+                &[
+                    Instruction::Source {
+                        index: RegisterIndex::default(),
+                        name: TableRef {
+                            schema_name: None,
+                            table_name: "table1".into()
+                        }
+                    },
+                    Instruction::Empty {
+                        index: RegisterIndex::default().next_index()
+                    },
+                    Instruction::Project {
+                        input: RegisterIndex::default(),
+                        output: RegisterIndex::default().next_index(),
+                        expr: Expr::Wildcard,
+                        alias: None
+                    },
+                    Instruction::Return {
+                        index: RegisterIndex::default().next_index(),
+                    }
+                ]
+            )
+        });
+
+        check_single_statement("SELECT * FROM table1 WHERE col1 = 1", |instrs| {
+            assert_eq!(
+                instrs,
+                &[
+                    Instruction::Source {
+                        index: RegisterIndex::default(),
+                        name: TableRef {
+                            schema_name: None,
+                            table_name: "table1".into()
+                        }
+                    },
+                    Instruction::Filter {
+                        index: RegisterIndex::default(),
+                        expr: Expr::Binary {
+                            left: Box::new(Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col1".into(),
+                            },)),
+                            op: BinOp::Equal,
+                            right: Box::new(Expr::Value(Value::Int64(1)))
+                        },
+                    },
+                    Instruction::Empty {
+                        index: RegisterIndex::default().next_index()
+                    },
+                    Instruction::Project {
+                        input: RegisterIndex::default(),
+                        output: RegisterIndex::default().next_index(),
+                        expr: Expr::Wildcard,
+                        alias: None
+                    },
+                    Instruction::Return {
+                        index: RegisterIndex::default().next_index(),
+                    }
+                ]
+            )
+        });
+
+        check_single_statement(
+            "SELECT col2, col3
+            FROM table1
+            WHERE col1 = 1
+            ",
+            |instrs| {
+                assert_eq!(
+                    instrs,
+                    &[
+                        Instruction::Source {
+                            index: RegisterIndex::default(),
+                            name: TableRef {
+                                schema_name: None,
+                                table_name: "table1".into()
+                            }
+                        },
+                        Instruction::Filter {
+                            index: RegisterIndex::default(),
+                            expr: Expr::Binary {
+                                left: Box::new(Expr::ColumnRef(ColumnRef {
+                                    schema_name: None,
+                                    table_name: None,
+                                    col_name: "col1".into(),
+                                },)),
+                                op: BinOp::Equal,
+                                right: Box::new(Expr::Value(Value::Int64(1)))
+                            },
+                        },
+                        Instruction::Empty {
+                            index: RegisterIndex::default().next_index()
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default().next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col2".into(),
+                            }),
+                            alias: None
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default().next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col3".into(),
+                            }),
+                            alias: None
+                        },
+                        Instruction::Return {
+                            index: RegisterIndex::default().next_index(),
+                        }
+                    ]
+                )
+            },
+        );
+
+        check_single_statement(
+            "SELECT col2, col3
+            FROM table1
+            WHERE col1 = 1 AND col2 = 2
+            ",
+            |instrs| {
+                assert_eq!(
+                    instrs,
+                    &[
+                        Instruction::Source {
+                            index: RegisterIndex::default(),
+                            name: TableRef {
+                                schema_name: None,
+                                table_name: "table1".into()
+                            }
+                        },
+                        Instruction::Filter {
+                            index: RegisterIndex::default(),
+                            expr: Expr::Binary {
+                                left: Box::new(Expr::Binary {
+                                    left: Box::new(Expr::ColumnRef(ColumnRef {
+                                        schema_name: None,
+                                        table_name: None,
+                                        col_name: "col1".into(),
+                                    },)),
+                                    op: BinOp::Equal,
+                                    right: Box::new(Expr::Value(Value::Int64(1)))
+                                }),
+                                op: BinOp::And,
+                                right: Box::new(Expr::Binary {
+                                    left: Box::new(Expr::ColumnRef(ColumnRef {
+                                        schema_name: None,
+                                        table_name: None,
+                                        col_name: "col2".into(),
+                                    },)),
+                                    op: BinOp::Equal,
+                                    right: Box::new(Expr::Value(Value::Int64(2)))
+                                })
+                            },
+                        },
+                        Instruction::Empty {
+                            index: RegisterIndex::default().next_index()
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default().next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col2".into(),
+                            }),
+                            alias: None
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default().next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col3".into(),
+                            }),
+                            alias: None
+                        },
+                        Instruction::Return {
+                            index: RegisterIndex::default().next_index(),
+                        }
+                    ]
+                )
+            },
+        );
+
+        check_single_statement(
+            "SELECT col2, col3
+            FROM table1
+            WHERE col1 = 1 OR col2 = 2
+            ",
+            |instrs| {
+                assert_eq!(
+                    instrs,
+                    &[
+                        Instruction::Source {
+                            index: RegisterIndex::default(),
+                            name: TableRef {
+                                schema_name: None,
+                                table_name: "table1".into()
+                            }
+                        },
+                        Instruction::Filter {
+                            index: RegisterIndex::default(),
+                            expr: Expr::Binary {
+                                left: Box::new(Expr::Binary {
+                                    left: Box::new(Expr::ColumnRef(ColumnRef {
+                                        schema_name: None,
+                                        table_name: None,
+                                        col_name: "col1".into(),
+                                    },)),
+                                    op: BinOp::Equal,
+                                    right: Box::new(Expr::Value(Value::Int64(1)))
+                                }),
+                                op: BinOp::Or,
+                                right: Box::new(Expr::Binary {
+                                    left: Box::new(Expr::ColumnRef(ColumnRef {
+                                        schema_name: None,
+                                        table_name: None,
+                                        col_name: "col2".into(),
+                                    },)),
+                                    op: BinOp::Equal,
+                                    right: Box::new(Expr::Value(Value::Int64(2)))
+                                })
+                            },
+                        },
+                        Instruction::Empty {
+                            index: RegisterIndex::default().next_index()
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default().next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col2".into(),
+                            }),
+                            alias: None
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default().next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col3".into(),
+                            }),
+                            alias: None
+                        },
+                        Instruction::Return {
+                            index: RegisterIndex::default().next_index(),
+                        }
+                    ]
+                )
+            },
+        );
+
+        check_single_statement(
+            "SELECT col2, col3
+            FROM table1
+            WHERE col1 = 1
+            ORDER BY col2
+            LIMIT 100
+            ",
+            |instrs| {
+                assert_eq!(
+                    instrs,
+                    &[
+                        Instruction::Source {
+                            index: RegisterIndex::default(),
+                            name: TableRef {
+                                schema_name: None,
+                                table_name: "table1".into()
+                            }
+                        },
+                        Instruction::Filter {
+                            index: RegisterIndex::default(),
+                            expr: Expr::Binary {
+                                left: Box::new(Expr::ColumnRef(ColumnRef {
+                                    schema_name: None,
+                                    table_name: None,
+                                    col_name: "col1".into(),
+                                },)),
+                                op: BinOp::Equal,
+                                right: Box::new(Expr::Value(Value::Int64(1)))
+                            },
+                        },
+                        Instruction::Empty {
+                            index: RegisterIndex::default().next_index()
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default().next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col2".into(),
+                            }),
+                            alias: None
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default().next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col3".into(),
+                            }),
+                            alias: None
+                        },
+                        Instruction::Order {
+                            index: RegisterIndex::default().next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col2".into(),
+                            }),
+                            ascending: true
+                        },
+                        Instruction::Limit {
+                            index: RegisterIndex::default().next_index(),
+                            limit: 100,
+                        },
+                        Instruction::Return {
+                            index: RegisterIndex::default().next_index(),
+                        }
+                    ]
+                )
+            },
+        );
+
+        check_single_statement(
+            "SELECT col2, MAX(col3) AS max_col3
+            FROM table1
+            WHERE col1 = 1
+            GROUP BY col2
+            HAVING MAX(col3) > 10
+            ",
+            |instrs| {
+                assert_eq!(
+                    instrs,
+                    &[
+                        Instruction::Source {
+                            index: RegisterIndex::default(),
+                            name: TableRef {
+                                schema_name: None,
+                                table_name: "table1".into()
+                            }
+                        },
+                        Instruction::Filter {
+                            index: RegisterIndex::default(),
+                            expr: Expr::Binary {
+                                left: Box::new(Expr::ColumnRef(ColumnRef {
+                                    schema_name: None,
+                                    table_name: None,
+                                    col_name: "col1".into(),
+                                },)),
+                                op: BinOp::Equal,
+                                right: Box::new(Expr::Value(Value::Int64(1)))
+                            },
+                        },
+                        Instruction::GroupBy {
+                            index: RegisterIndex::default(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col2".into(),
+                            })
+                        },
+                        Instruction::Filter {
+                            index: RegisterIndex::default(),
+                            expr: Expr::Binary {
+                                left: Box::new(Expr::Function {
+                                    name: "MAX".into(),
+                                    args: vec![Expr::ColumnRef(ColumnRef {
+                                        schema_name: None,
+                                        table_name: None,
+                                        col_name: "col3".into(),
+                                    })]
+                                }),
+                                op: BinOp::GreaterThan,
+                                right: Box::new(Expr::Value(Value::Int64(10)))
+                            },
+                        },
+                        Instruction::Empty {
+                            index: RegisterIndex::default().next_index()
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default().next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col2".into(),
+                            }),
+                            alias: None
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default().next_index(),
+                            expr: Expr::Function {
+                                name: "MAX".into(),
+                                args: vec![Expr::ColumnRef(ColumnRef {
+                                    schema_name: None,
+                                    table_name: None,
+                                    col_name: "col3".into(),
+                                })]
+                            },
+                            alias: Some("max_col3".into())
+                        },
+                        Instruction::Return {
+                            index: RegisterIndex::default().next_index(),
+                        }
+                    ]
+                )
+            },
+        );
     }
 }
