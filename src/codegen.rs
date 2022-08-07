@@ -206,11 +206,14 @@ pub fn codegen(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                                 }
                             }
                         }
+                        &[] => instrs.push(Instruction::Empty {
+                            index: table_reg_index,
+                        }),
                         _ => {
                             // TODO: multiple tables
                             return Err(CodegenError::UnsupportedStatementForm(
                                 "Only select from a single table is supported for now",
-                                select.to_string(),
+                                format!("{:?}", select.from),
                             ));
                         }
                     }
@@ -693,5 +696,31 @@ mod tests {
                 )
             },
         );
+    }
+
+    #[test]
+    fn select() {
+        check_single_statement("SELECT 1", |instrs| {
+            assert_eq!(
+                instrs,
+                &[
+                    Instruction::Empty {
+                        index: RegisterIndex::default()
+                    },
+                    Instruction::Empty {
+                        index: RegisterIndex::default().next_index()
+                    },
+                    Instruction::Project {
+                        input: RegisterIndex::default(),
+                        output: RegisterIndex::default().next_index(),
+                        expr: Expr::Value(Value::Int64(1)),
+                        alias: None
+                    },
+                    Instruction::Return {
+                        index: RegisterIndex::default().next_index()
+                    },
+                ]
+            )
+        });
     }
 }
