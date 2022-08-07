@@ -11,3 +11,6 @@ sqlparser = "0.18.0"
 
 [features]
 thread-safe = []
+
+[dev-dependencies]
+pretty_assertions = "1.2.1"

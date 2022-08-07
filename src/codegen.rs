@@ -430,6 +430,8 @@ impl Error for CodegenError {}
 mod tests {
     use sqlparser::ast::{ColumnOption, ColumnOptionDef, DataType};
 
+    use pretty_assertions::assert_eq;
+
     use crate::{
         codegen::codegen,
         expr::Expr,
