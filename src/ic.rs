@@ -11,6 +11,7 @@ use crate::{
 /// The intermediate representation of a query.
 pub struct IntermediateCode {
     pub instrs: Vec<Instruction>,
+    pub next_reg_index: RegisterIndex,
 }
 
 /// The instruction set.

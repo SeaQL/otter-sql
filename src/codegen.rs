@@ -241,7 +241,7 @@ pub fn codegen(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
 
                     if !select.projection.is_empty() {
                         let original_table_reg_index = table_reg_index;
-                        let table_reg_index = current_reg;
+                        table_reg_index = current_reg;
                         current_reg = current_reg.next_index();
 
                         instrs.push(Instruction::Empty {
@@ -332,6 +332,15 @@ pub fn codegen(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                 }
             };
 
+            for order_by in query.order_by.clone() {
+                instrs.push(Instruction::Order {
+                    index: table_reg_index,
+                    expr: order_by.expr.try_into()?,
+                    ascending: order_by.asc.unwrap_or(true),
+                });
+                // TODO: support NULLS FIRST/NULLS LAST
+            }
+
             if let Some(limit) = query.limit.clone() {
                 if let ast::Expr::Value(val) = limit.clone() {
                     if let Value::Int64(limit) = val.clone().try_into()? {
@@ -355,15 +364,6 @@ pub fn codegen(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                 }
             }
 
-            for order_by in query.order_by.clone() {
-                instrs.push(Instruction::Order {
-                    index: table_reg_index,
-                    expr: order_by.expr.try_into()?,
-                    ascending: order_by.asc.unwrap_or(true),
-                });
-                // TODO: support NULLS FIRST/NULLS LAST
-            }
-
             instrs.push(Instruction::Return {
                 index: table_reg_index,
             });
@@ -383,7 +383,10 @@ pub fn codegen(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
         _ => Err(CodegenError::UnsupportedStatement(ast.to_string())),
     }?;
 
-    Ok(IntermediateCode { instrs })
+    Ok(IntermediateCode {
+        instrs,
+        next_reg_index: current_reg,
+    })
 }
 
 #[derive(Debug)]
@@ -437,9 +440,9 @@ mod tests {
 
     use crate::{
         codegen::codegen,
-        expr::Expr,
+        expr::{BinOp, Expr},
         ic::Instruction,
-        identifier::{SchemaRef, TableRef},
+        identifier::{ColumnRef, SchemaRef, TableRef},
         parser::parse,
         value::Value,
         vm::RegisterIndex,
