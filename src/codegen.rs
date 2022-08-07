@@ -431,51 +431,45 @@ mod tests {
     use sqlparser::ast::{ColumnOption, ColumnOptionDef, DataType};
 
     use crate::{
-        codegen::codegen, expr::Expr, ic::Instruction, identifier::TableRef, parser::parse,
-        value::Value, vm::RegisterIndex,
+        codegen::codegen,
+        expr::Expr,
+        ic::Instruction,
+        identifier::{SchemaRef, TableRef},
+        parser::parse,
+        value::Value,
+        vm::RegisterIndex,
     };
 
-    fn check_single_statement(
-        query: &str,
-        callback: impl Fn(&[Instruction]) -> bool,
-    ) -> Result<(), String> {
+    fn check_single_statement(query: &str, callback: impl Fn(&[Instruction])) {
         let parsed = parse(query).unwrap();
         assert_eq!(parsed.len(), 1);
 
         let statement = &parsed[0];
         let ic = codegen(&statement).unwrap();
-        if !callback(ic.instrs.as_slice()) {
-            Err(format!("Instructions did not match: {:?}", ic.instrs))
-        } else {
-            Ok(())
-        }
+        callback(ic.instrs.as_slice());
     }
 
     #[test]
     fn create_schema() {
-        check_single_statement("CREATE SCHEMA abc", |instrs| match instrs {
-            &[Instruction::NewSchema {
-                schema_name,
-                exists_ok: false,
-            }] => {
-                assert_eq!(schema_name.0.as_str(), "abc");
-                true
-            }
-            _ => false,
-        })
-        .unwrap();
+        check_single_statement("CREATE SCHEMA abc", |instrs| {
+            assert_eq!(
+                instrs,
+                &[Instruction::NewSchema {
+                    schema_name: SchemaRef("abc".into()),
+                    exists_ok: false,
+                }]
+            )
+        });
 
-        check_single_statement("CREATE SCHEMA IF NOT EXISTS abc", |instrs| match instrs {
-            &[Instruction::NewSchema {
-                schema_name,
-                exists_ok: true,
-            }] => {
-                assert_eq!(schema_name.0.as_str(), "abc");
-                true
-            }
-            _ => false,
-        })
-        .unwrap();
+        check_single_statement("CREATE SCHEMA IF NOT EXISTS abcd", |instrs| {
+            assert_eq!(
+                instrs,
+                &[Instruction::NewSchema {
+                    schema_name: SchemaRef("abcd".into()),
+                    exists_ok: true,
+                }]
+            )
+        });
     }
 
     #[test]
@@ -489,174 +483,79 @@ mod tests {
                  col3 INTEGER UNIQUE
              )",
             |instrs| {
-                let mut index = 0;
-                if let Instruction::Empty { index } = instrs[index] {
-                    assert_eq!(index, RegisterIndex::default());
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::ColumnDef {
-                    index,
-                    name,
-                    ref data_type,
-                } = instrs[index]
-                {
-                    assert_eq!(index, RegisterIndex::default().next_index());
-                    assert_eq!(name.as_str(), "col1");
-                    assert_eq!(data_type, &DataType::Int(None));
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::AddColumnOption { index, ref option } = instrs[index] {
-                    assert_eq!(index, RegisterIndex::default().next_index());
-                    assert_eq!(
-                        option,
-                        &ColumnOptionDef {
-                            name: None,
-                            option: ColumnOption::Unique { is_primary: true }
+                assert_eq!(
+                    instrs,
+                    &[
+                        Instruction::Empty {
+                            index: RegisterIndex::default()
+                        },
+                        Instruction::ColumnDef {
+                            index: RegisterIndex::default().next_index(),
+                            name: "col1".into(),
+                            data_type: DataType::Int(None),
+                        },
+                        Instruction::AddColumnOption {
+                            index: RegisterIndex::default().next_index(),
+                            option: ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Unique { is_primary: true }
+                            }
+                        },
+                        Instruction::AddColumnOption {
+                            index: RegisterIndex::default().next_index(),
+                            option: ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::NotNull
+                            }
+                        },
+                        Instruction::AddColumn {
+                            table_reg_index: RegisterIndex::default(),
+                            col_index: RegisterIndex::default().next_index(),
+                        },
+                        Instruction::ColumnDef {
+                            index: RegisterIndex::default().next_index(),
+                            name: "col2".into(),
+                            data_type: DataType::String,
+                        },
+                        Instruction::AddColumnOption {
+                            index: RegisterIndex::default().next_index(),
+                            option: ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::NotNull
+                            }
+                        },
+                        Instruction::AddColumn {
+                            table_reg_index: RegisterIndex::default(),
+                            col_index: RegisterIndex::default().next_index(),
+                        },
+                        Instruction::ColumnDef {
+                            index: RegisterIndex::default().next_index(),
+                            name: "col3".into(),
+                            data_type: DataType::Int(None),
+                        },
+                        Instruction::AddColumnOption {
+                            index: RegisterIndex::default().next_index(),
+                            option: ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Unique { is_primary: false }
+                            }
+                        },
+                        Instruction::AddColumn {
+                            table_reg_index: RegisterIndex::default(),
+                            col_index: RegisterIndex::default().next_index(),
+                        },
+                        Instruction::NewTable {
+                            index: RegisterIndex::default(),
+                            name: TableRef {
+                                schema_name: None,
+                                table_name: "table1".into()
+                            },
+                            exists_ok: true,
                         }
-                    );
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::AddColumnOption { index, ref option } = instrs[index] {
-                    assert_eq!(index, RegisterIndex::default().next_index());
-                    assert_eq!(
-                        option,
-                        &ColumnOptionDef {
-                            name: None,
-                            option: ColumnOption::NotNull
-                        }
-                    );
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::AddColumn {
-                    table_reg_index,
-                    col_index,
-                } = instrs[index]
-                {
-                    assert_eq!(table_reg_index, RegisterIndex::default());
-                    assert_eq!(col_index, RegisterIndex::default().next_index());
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::ColumnDef {
-                    index,
-                    name,
-                    ref data_type,
-                } = instrs[index]
-                {
-                    assert_eq!(index, RegisterIndex::default().next_index());
-                    assert_eq!(name.as_str(), "col2");
-                    assert_eq!(data_type, &DataType::String);
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::AddColumnOption { index, ref option } = instrs[index] {
-                    assert_eq!(index, RegisterIndex::default().next_index());
-                    assert_eq!(
-                        option,
-                        &ColumnOptionDef {
-                            name: None,
-                            option: ColumnOption::NotNull
-                        }
-                    );
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::AddColumn {
-                    table_reg_index,
-                    col_index,
-                } = instrs[index]
-                {
-                    assert_eq!(table_reg_index, RegisterIndex::default());
-                    assert_eq!(col_index, RegisterIndex::default().next_index());
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::ColumnDef {
-                    index,
-                    name,
-                    ref data_type,
-                } = instrs[index]
-                {
-                    assert_eq!(index, RegisterIndex::default().next_index());
-                    assert_eq!(name.as_str(), "col3");
-                    assert_eq!(data_type, &DataType::Int(None));
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::AddColumnOption { index, ref option } = instrs[index] {
-                    assert_eq!(index, RegisterIndex::default().next_index());
-                    assert_eq!(
-                        option,
-                        &ColumnOptionDef {
-                            name: None,
-                            option: ColumnOption::Unique { is_primary: false }
-                        }
-                    );
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::AddColumn {
-                    table_reg_index,
-                    col_index,
-                } = instrs[index]
-                {
-                    assert_eq!(table_reg_index, RegisterIndex::default());
-                    assert_eq!(col_index, RegisterIndex::default().next_index());
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::NewTable {
-                    index,
-                    name,
-                    exists_ok,
-                } = instrs[index]
-                {
-                    assert_eq!(index, RegisterIndex::default());
-                    assert_eq!(
-                        name,
-                        TableRef {
-                            schema_name: None,
-                            table_name: "table1".into()
-                        }
-                    );
-                    assert_eq!(exists_ok, true);
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                assert_eq!(instrs.len(), index);
-
-                true
+                    ]
+                )
             },
-        )
-        .unwrap();
+        );
     }
 
     #[test]
@@ -668,146 +567,60 @@ mod tests {
                 (3, 'baz')
             ",
             |instrs| {
-                let mut index = 0;
-
-                if let Instruction::Source { index, name } = instrs[index] {
-                    assert_eq!(index, RegisterIndex::default());
-                    assert_eq!(
-                        name,
-                        TableRef {
-                            schema_name: None,
-                            table_name: "table1".into()
-                        }
-                    );
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::InsertDef {
-                    table_reg_index,
-                    index,
-                } = instrs[index]
-                {
-                    assert_eq!(table_reg_index, RegisterIndex::default());
-                    assert_eq!(index, RegisterIndex::default().next_index());
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::RowDef {
-                    insert_index,
-                    row_index,
-                } = instrs[index]
-                {
-                    assert_eq!(insert_index, RegisterIndex::default().next_index());
-                    assert_eq!(
-                        row_index,
-                        RegisterIndex::default().next_index().next_index()
-                    );
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::AddValue {
-                    row_index,
-                    ref expr,
-                } = instrs[index]
-                {
-                    assert_eq!(
-                        row_index,
-                        RegisterIndex::default().next_index().next_index()
-                    );
-                    assert_eq!(expr, &Expr::Value(Value::Int64(2)));
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::AddValue {
-                    row_index,
-                    ref expr,
-                } = instrs[index]
-                {
-                    assert_eq!(
-                        row_index,
-                        RegisterIndex::default().next_index().next_index()
-                    );
-                    assert_eq!(expr, &Expr::Value(Value::String("bar".to_owned())));
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::RowDef {
-                    insert_index,
-                    row_index,
-                } = instrs[index]
-                {
-                    assert_eq!(insert_index, RegisterIndex::default().next_index());
-                    assert_eq!(
-                        row_index,
-                        RegisterIndex::default()
-                            .next_index()
-                            .next_index()
-                            .next_index()
-                    );
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::AddValue {
-                    row_index,
-                    ref expr,
-                } = instrs[index]
-                {
-                    assert_eq!(
-                        row_index,
-                        RegisterIndex::default()
-                            .next_index()
-                            .next_index()
-                            .next_index()
-                    );
-                    assert_eq!(expr, &Expr::Value(Value::Int64(3)));
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::AddValue {
-                    row_index,
-                    ref expr,
-                } = instrs[index]
-                {
-                    assert_eq!(
-                        row_index,
-                        RegisterIndex::default()
-                            .next_index()
-                            .next_index()
-                            .next_index()
-                    );
-                    assert_eq!(expr, &Expr::Value(Value::String("baz".to_owned())));
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::Insert { index } = instrs[index] {
-                    assert_eq!(index, RegisterIndex::default().next_index());
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                assert_eq!(instrs.len(), index);
-
-                true
+                assert_eq!(
+                    instrs,
+                    &[
+                        Instruction::Source {
+                            index: RegisterIndex::default(),
+                            name: TableRef {
+                                schema_name: None,
+                                table_name: "table1".into()
+                            }
+                        },
+                        Instruction::InsertDef {
+                            table_reg_index: RegisterIndex::default(),
+                            index: RegisterIndex::default().next_index(),
+                        },
+                        Instruction::RowDef {
+                            insert_index: RegisterIndex::default().next_index(),
+                            row_index: RegisterIndex::default().next_index().next_index(),
+                        },
+                        Instruction::AddValue {
+                            row_index: RegisterIndex::default().next_index().next_index(),
+                            expr: Expr::Value(Value::Int64(2)),
+                        },
+                        Instruction::AddValue {
+                            row_index: RegisterIndex::default().next_index().next_index(),
+                            expr: Expr::Value(Value::String("bar".to_owned())),
+                        },
+                        Instruction::RowDef {
+                            insert_index: RegisterIndex::default().next_index(),
+                            row_index: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                        },
+                        Instruction::AddValue {
+                            row_index: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            expr: Expr::Value(Value::Int64(3)),
+                        },
+                        Instruction::AddValue {
+                            row_index: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            expr: Expr::Value(Value::String("baz".to_owned())),
+                        },
+                        Instruction::Insert {
+                            index: RegisterIndex::default().next_index()
+                        },
+                    ]
+                )
             },
-        )
-        .unwrap();
+        );
 
         check_single_statement(
             "
@@ -816,169 +629,67 @@ mod tests {
                 (3, 'baz')
             ",
             |instrs| {
-                let mut index = 0;
-
-                if let Instruction::Source { index, name } = instrs[index] {
-                    assert_eq!(index, RegisterIndex::default());
-                    assert_eq!(
-                        name,
-                        TableRef {
-                            schema_name: None,
-                            table_name: "table1".into()
-                        }
-                    );
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::InsertDef {
-                    table_reg_index,
-                    index,
-                } = instrs[index]
-                {
-                    assert_eq!(table_reg_index, RegisterIndex::default());
-                    assert_eq!(index, RegisterIndex::default().next_index());
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::ColumnInsertDef {
-                    insert_index,
-                    col_name,
-                } = instrs[index]
-                {
-                    assert_eq!(insert_index, RegisterIndex::default().next_index());
-                    assert_eq!(col_name.as_str(), "col1");
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::ColumnInsertDef {
-                    insert_index,
-                    col_name,
-                } = instrs[index]
-                {
-                    assert_eq!(insert_index, RegisterIndex::default().next_index());
-                    assert_eq!(col_name.as_str(), "col2");
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::RowDef {
-                    insert_index,
-                    row_index,
-                } = instrs[index]
-                {
-                    assert_eq!(insert_index, RegisterIndex::default().next_index());
-                    assert_eq!(
-                        row_index,
-                        RegisterIndex::default().next_index().next_index()
-                    );
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::AddValue {
-                    row_index,
-                    ref expr,
-                } = instrs[index]
-                {
-                    assert_eq!(
-                        row_index,
-                        RegisterIndex::default().next_index().next_index()
-                    );
-                    assert_eq!(expr, &Expr::Value(Value::Int64(2)));
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::AddValue {
-                    row_index,
-                    ref expr,
-                } = instrs[index]
-                {
-                    assert_eq!(
-                        row_index,
-                        RegisterIndex::default().next_index().next_index()
-                    );
-                    assert_eq!(expr, &Expr::Value(Value::String("bar".to_owned())));
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::RowDef {
-                    insert_index,
-                    row_index,
-                } = instrs[index]
-                {
-                    assert_eq!(insert_index, RegisterIndex::default().next_index());
-                    assert_eq!(
-                        row_index,
-                        RegisterIndex::default()
-                            .next_index()
-                            .next_index()
-                            .next_index()
-                    );
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::AddValue {
-                    row_index,
-                    ref expr,
-                } = instrs[index]
-                {
-                    assert_eq!(
-                        row_index,
-                        RegisterIndex::default()
-                            .next_index()
-                            .next_index()
-                            .next_index()
-                    );
-                    assert_eq!(expr, &Expr::Value(Value::Int64(3)));
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::AddValue {
-                    row_index,
-                    ref expr,
-                } = instrs[index]
-                {
-                    assert_eq!(
-                        row_index,
-                        RegisterIndex::default()
-                            .next_index()
-                            .next_index()
-                            .next_index()
-                    );
-                    assert_eq!(expr, &Expr::Value(Value::String("baz".to_owned())));
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                if let Instruction::Insert { index } = instrs[index] {
-                    assert_eq!(index, RegisterIndex::default().next_index());
-                } else {
-                    panic!("Did not match: {:?}", instrs[index]);
-                }
-                index += 1;
-
-                assert_eq!(instrs.len(), index);
-
-                true
+                assert_eq!(
+                    instrs,
+                    &[
+                        Instruction::Source {
+                            index: RegisterIndex::default(),
+                            name: TableRef {
+                                schema_name: None,
+                                table_name: "table1".into()
+                            }
+                        },
+                        Instruction::InsertDef {
+                            table_reg_index: RegisterIndex::default(),
+                            index: RegisterIndex::default().next_index(),
+                        },
+                        Instruction::ColumnInsertDef {
+                            insert_index: RegisterIndex::default().next_index(),
+                            col_name: "col1".into(),
+                        },
+                        Instruction::ColumnInsertDef {
+                            insert_index: RegisterIndex::default().next_index(),
+                            col_name: "col2".into(),
+                        },
+                        Instruction::RowDef {
+                            insert_index: RegisterIndex::default().next_index(),
+                            row_index: RegisterIndex::default().next_index().next_index(),
+                        },
+                        Instruction::AddValue {
+                            row_index: RegisterIndex::default().next_index().next_index(),
+                            expr: Expr::Value(Value::Int64(2)),
+                        },
+                        Instruction::AddValue {
+                            row_index: RegisterIndex::default().next_index().next_index(),
+                            expr: Expr::Value(Value::String("bar".to_owned())),
+                        },
+                        Instruction::RowDef {
+                            insert_index: RegisterIndex::default().next_index(),
+                            row_index: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                        },
+                        Instruction::AddValue {
+                            row_index: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            expr: Expr::Value(Value::Int64(3)),
+                        },
+                        Instruction::AddValue {
+                            row_index: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            expr: Expr::Value(Value::String("baz".to_owned())),
+                        },
+                        Instruction::Insert {
+                            index: RegisterIndex::default().next_index()
+                        },
+                    ]
+                )
             },
-        )
-        .unwrap();
+        );
     }
 }

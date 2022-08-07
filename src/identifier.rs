@@ -7,7 +7,7 @@ use sqlparser::ast::Ident;
 /// A fixed capacity copy-able string.
 pub type BoundedString = ArrayString<U63>;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SchemaRef(pub BoundedString);
 
 impl TryFrom<Vec<Ident>> for SchemaRef {

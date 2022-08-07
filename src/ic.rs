@@ -14,7 +14,7 @@ pub struct IntermediateCode {
 }
 
 /// The instruction set.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
     /// Load a [`Value`] into a register.
     Value { index: RegisterIndex, value: Value },
