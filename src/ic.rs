@@ -223,735 +223,352 @@ pub enum Instruction {
     },
 }
 
-#[cfg(test)]
-mod test {
-    use sqlparser::ast::{ColumnOption, ColumnOptionDef, DataType};
+// #[cfg(test)]
+// mod test {
+//     use sqlparser::ast::{ColumnOption, ColumnOptionDef, DataType};
 
-    use crate::{
-        expr::{BinOp, Expr, UnOp},
-        table::TABLE_UNIQUE_KEY_NAME,
-        value,
-        vm::RegisterIndex,
-    };
+//     use crate::{
+//         expr::{BinOp, Expr, UnOp},
+//         table::TABLE_UNIQUE_KEY_NAME,
+//         value,
+//         vm::RegisterIndex,
+//     };
 
-    use super::{Instruction::*, IntermediateCode};
+//     use super::{Instruction::*, IntermediateCode};
 
-    // TODO: placeholder tests. Test actual AST -> IC conversion once that is implemented.
-    #[test]
-    fn select_statements() {
-        // `SELECT 1`
-        let _ = IntermediateCode {
-            instrs: vec![Value {
-                index: RegisterIndex::default(),
-                // NOTE: All numbers from the AST will be assumed to be Int64.
-                value: value::Value::Int64(1),
-            }],
-        };
+//     #[test]
+//     fn alter_statements() {
+//         // `ALTER TABLE table1 ADD COLUMN col4 STRING NULL`
+//         let table_reg_index = RegisterIndex::default();
+//         let col_index = table_reg_index.next_index();
+//         let _ = IntermediateCode {
+//             instrs: vec![
+//                 Source {
+//                     index: table_reg_index,
+//                     name: "table1".into(),
+//                 },
+//                 ColumnDef {
+//                     index: col_index,
+//                     name: "col4".into(),
+//                     data_type: DataType::String,
+//                 },
+//                 AddColumnOption {
+//                     index: col_index,
+//                     option: ColumnOptionDef {
+//                         name: None,
+//                         option: ColumnOption::Null,
+//                     },
+//                 },
+//                 AddColumn {
+//                     table_reg_index,
+//                     col_index,
+//                 },
+//             ],
+//         };
 
-        // `SELECT * FROM table1`
-        let table_reg_index = RegisterIndex::default();
-        let _ = IntermediateCode {
-            instrs: vec![
-                Source {
-                    index: table_reg_index,
-                    name: "table1".into(),
-                },
-                Return {
-                    index: table_reg_index,
-                },
-            ],
-        };
+//         // `ALTER TABLE table1 RENAME COLUMN col4 col5`
+//         let table_reg_index = RegisterIndex::default();
+//         let _ = IntermediateCode {
+//             instrs: vec![
+//                 Source {
+//                     index: table_reg_index,
+//                     name: "table1".into(),
+//                 },
+//                 RenameColumn {
+//                     index: table_reg_index,
+//                     old_name: "col4".into(),
+//                     new_name: "col5".into(),
+//                 },
+//             ],
+//         };
 
-        // `SELECT * FROM table1 WHERE col1 = 1`
-        let table_reg_index = RegisterIndex::default();
-        let _ = IntermediateCode {
-            instrs: vec![
-                Source {
-                    index: table_reg_index,
-                    name: "table1".into(),
-                },
-                Filter {
-                    index: table_reg_index,
-                    expr: Expr::Binary {
-                        left: Box::new(Expr::ColumnRef("col1".into())),
-                        op: BinOp::Equal,
-                        right: Box::new(Expr::Value(value::Value::Int64(1))),
-                    },
-                },
-                Return {
-                    index: table_reg_index,
-                },
-            ],
-        };
+//         // `ALTER TABLE table1 DROP COLUMN col5`
+//         let table_reg_index = RegisterIndex::default();
+//         let _ = IntermediateCode {
+//             instrs: vec![
+//                 Source {
+//                     index: table_reg_index,
+//                     name: "table1".into(),
+//                 },
+//                 RemoveColumn {
+//                     index: table_reg_index,
+//                     col_name: "col5".into(),
+//                 },
+//             ],
+//         };
+//     }
 
-        // `SELECT col2, col3 FROM table1 WHERE col1 = 1`
-        let table_reg_index = RegisterIndex::default();
-        let table_reg_index_2 = table_reg_index.next_index();
-        let _ = IntermediateCode {
-            instrs: vec![
-                Source {
-                    index: table_reg_index,
-                    name: "table1".into(),
-                },
-                Filter {
-                    index: table_reg_index,
-                    expr: Expr::Binary {
-                        left: Box::new(Expr::ColumnRef("col1".into())),
-                        op: BinOp::Equal,
-                        right: Box::new(Expr::Value(value::Value::Int64(1))),
-                    },
-                },
-                Empty {
-                    index: table_reg_index_2,
-                },
-                Project {
-                    input: table_reg_index,
-                    output: table_reg_index_2,
-                    expr: Expr::ColumnRef("col2".into()),
-                    alias: None,
-                },
-                Project {
-                    input: table_reg_index,
-                    output: table_reg_index_2,
-                    expr: Expr::ColumnRef("col3".into()),
-                    alias: None,
-                },
-                Return {
-                    index: table_reg_index_2,
-                },
-            ],
-        };
+//     #[test]
+//     fn select_with_joins() {
+//         // `SELECT col1, col2, col5 FROM table1 INNER JOIN table2 ON table1.col2 = table2.col3`
+//         let table_reg_index = RegisterIndex::default();
+//         let table_reg_index_2 = table_reg_index.next_index();
+//         let table_reg_index_3 = table_reg_index_2.next_index();
+//         let table_reg_index_4 = table_reg_index_3.next_index();
+//         let _ = IntermediateCode {
+//             instrs: vec![
+//                 Source {
+//                     index: table_reg_index,
+//                     name: "table1".into(),
+//                 },
+//                 Source {
+//                     index: table_reg_index_2,
+//                     name: "table2".into(),
+//                 },
+//                 CrossJoin {
+//                     input1: table_reg_index,
+//                     input2: table_reg_index_2,
+//                     output: table_reg_index_3,
+//                 },
+//                 Filter {
+//                     index: table_reg_index_3,
+//                     expr: Expr::Binary {
+//                         left: Box::new(Expr::ColumnRef("table1.col2".into())),
+//                         op: BinOp::Equal,
+//                         right: Box::new(Expr::ColumnRef("table2.col3".into())),
+//                     },
+//                 },
+//                 // Inner join, so remove NULLs
+//                 Filter {
+//                     index: table_reg_index_3,
+//                     expr: Expr::Unary {
+//                         op: UnOp::IsNotNull,
+//                         operand: Box::new(Expr::ColumnRef(
+//                             format!("table1.{}", TABLE_UNIQUE_KEY_NAME).as_str().into(),
+//                         )),
+//                     },
+//                 },
+//                 // Inner join, so remove NULLs
+//                 Filter {
+//                     index: table_reg_index_3,
+//                     expr: Expr::Unary {
+//                         op: UnOp::IsNotNull,
+//                         operand: Box::new(Expr::ColumnRef(
+//                             format!("table2.{}", TABLE_UNIQUE_KEY_NAME).as_str().into(),
+//                         )),
+//                     },
+//                 },
+//                 Empty {
+//                     index: table_reg_index_4,
+//                 },
+//                 Project {
+//                     input: table_reg_index_3,
+//                     output: table_reg_index_4,
+//                     expr: Expr::ColumnRef("col1".into()),
+//                     alias: None,
+//                 },
+//                 Project {
+//                     input: table_reg_index_3,
+//                     output: table_reg_index_4,
+//                     expr: Expr::ColumnRef("col2".into()),
+//                     alias: None,
+//                 },
+//                 Project {
+//                     input: table_reg_index_3,
+//                     output: table_reg_index_4,
+//                     expr: Expr::ColumnRef("col5".into()),
+//                     alias: None,
+//                 },
+//                 Return {
+//                     index: table_reg_index_4,
+//                 },
+//             ],
+//         };
 
-        // `SELECT col2, col3 FROM main.table1 WHERE col1 = 1 ORDER BY col2 LIMIT 100`
-        let table_reg_index = RegisterIndex::default();
-        let table_reg_index_2 = table_reg_index.next_index();
-        let _ = IntermediateCode {
-            instrs: vec![
-                Source {
-                    index: table_reg_index,
-                    name: "table1".into(),
-                },
-                Filter {
-                    index: table_reg_index,
-                    expr: Expr::Binary {
-                        left: Box::new(Expr::ColumnRef("col1".into())),
-                        op: BinOp::Equal,
-                        right: Box::new(Expr::Value(value::Value::Int64(1))),
-                    },
-                },
-                Empty {
-                    index: table_reg_index_2,
-                },
-                Project {
-                    input: table_reg_index,
-                    output: table_reg_index_2,
-                    expr: Expr::ColumnRef("col2".into()),
-                    alias: None,
-                },
-                Project {
-                    input: table_reg_index,
-                    output: table_reg_index_2,
-                    expr: Expr::ColumnRef("col3".into()),
-                    alias: None,
-                },
-                Order {
-                    index: table_reg_index_2,
-                    expr: Expr::ColumnRef("col2".into()),
-                    ascending: true,
-                },
-                Limit {
-                    index: table_reg_index_2,
-                    limit: 100,
-                },
-                Return {
-                    index: table_reg_index_2,
-                },
-            ],
-        };
+//         // `SELECT col1, col2, col5 FROM table1, table2`
+//         let table_reg_index = RegisterIndex::default();
+//         let table_reg_index_2 = table_reg_index.next_index();
+//         let table_reg_index_3 = table_reg_index_2.next_index();
+//         let table_reg_index_4 = table_reg_index_3.next_index();
+//         let _ = IntermediateCode {
+//             instrs: vec![
+//                 Source {
+//                     index: table_reg_index,
+//                     name: "table1".into(),
+//                 },
+//                 Source {
+//                     index: table_reg_index_2,
+//                     name: "table2".into(),
+//                 },
+//                 CrossJoin {
+//                     input1: table_reg_index,
+//                     input2: table_reg_index_2,
+//                     output: table_reg_index_3,
+//                 },
+//                 Empty {
+//                     index: table_reg_index_4,
+//                 },
+//                 Project {
+//                     input: table_reg_index_3,
+//                     output: table_reg_index_4,
+//                     expr: Expr::ColumnRef("col1".into()),
+//                     alias: None,
+//                 },
+//                 Project {
+//                     input: table_reg_index_3,
+//                     output: table_reg_index_4,
+//                     expr: Expr::ColumnRef("col2".into()),
+//                     alias: None,
+//                 },
+//                 Project {
+//                     input: table_reg_index_3,
+//                     output: table_reg_index_4,
+//                     expr: Expr::ColumnRef("col5".into()),
+//                     alias: None,
+//                 },
+//                 Return {
+//                     index: table_reg_index_4,
+//                 },
+//             ],
+//         };
 
-        // `SELECT col2, MAX(col3) AS max_col3 FROM table1 WHERE col1 = 1 GROUP BY col2 HAVING MAX(col3) > 10`
-        let table_reg_index = RegisterIndex::default();
-        let table_reg_index_2 = table_reg_index.next_index();
-        let _ = IntermediateCode {
-            instrs: vec![
-                Source {
-                    index: table_reg_index,
-                    name: "table1".into(),
-                },
-                Filter {
-                    index: table_reg_index,
-                    expr: Expr::Binary {
-                        left: Box::new(Expr::ColumnRef("col1".into())),
-                        op: BinOp::Equal,
-                        right: Box::new(Expr::Value(value::Value::Int64(1))),
-                    },
-                },
-                GroupBy {
-                    index: table_reg_index,
-                    expr: Expr::ColumnRef("col2".into()),
-                },
-                Filter {
-                    index: table_reg_index,
-                    expr: Expr::Binary {
-                        left: Box::new(Expr::Function {
-                            name: "MAX".into(),
-                            args: vec![Expr::ColumnRef("col3".into())],
-                        }),
-                        op: BinOp::GreaterThan,
-                        right: Box::new(Expr::Value(value::Value::Int64(10))),
-                    },
-                },
-                Empty {
-                    index: table_reg_index_2,
-                },
-                Project {
-                    input: table_reg_index,
-                    output: table_reg_index_2,
-                    expr: Expr::ColumnRef("col2".into()),
-                    alias: None,
-                },
-                Project {
-                    input: table_reg_index,
-                    output: table_reg_index_2,
-                    expr: Expr::Function {
-                        name: "MAX".into(),
-                        args: vec![Expr::ColumnRef("col3".into())],
-                    },
-                    alias: None,
-                },
-                Return {
-                    index: table_reg_index_2,
-                },
-            ],
-        };
+//         // `SELECT col1, col2, col5 FROM table1 NATURAL JOIN table2`
+//         let table_reg_index = RegisterIndex::default();
+//         let table_reg_index_2 = table_reg_index.next_index();
+//         let table_reg_index_3 = table_reg_index_2.next_index();
+//         let table_reg_index_4 = table_reg_index_3.next_index();
+//         let _ = IntermediateCode {
+//             instrs: vec![
+//                 Source {
+//                     index: table_reg_index,
+//                     name: "table1".into(),
+//                 },
+//                 Source {
+//                     index: table_reg_index_2,
+//                     name: "table2".into(),
+//                 },
+//                 NaturalJoin {
+//                     input1: table_reg_index,
+//                     input2: table_reg_index_2,
+//                     output: table_reg_index_3,
+//                 },
+//                 // Not an outer join, so remove NULLs
+//                 Filter {
+//                     index: table_reg_index_3,
+//                     expr: Expr::Unary {
+//                         op: UnOp::IsNotNull,
+//                         operand: Box::new(Expr::ColumnRef(
+//                             format!("table1.{}", TABLE_UNIQUE_KEY_NAME).as_str().into(),
+//                         )),
+//                     },
+//                 },
+//                 // Not an outer join, so remove NULLs
+//                 Filter {
+//                     index: table_reg_index_3,
+//                     expr: Expr::Unary {
+//                         op: UnOp::IsNotNull,
+//                         operand: Box::new(Expr::ColumnRef(
+//                             format!("table2.{}", TABLE_UNIQUE_KEY_NAME).as_str().into(),
+//                         )),
+//                     },
+//                 },
+//                 Empty {
+//                     index: table_reg_index_4,
+//                 },
+//                 Project {
+//                     input: table_reg_index_3,
+//                     output: table_reg_index_4,
+//                     expr: Expr::ColumnRef("col1".into()),
+//                     alias: None,
+//                 },
+//                 Project {
+//                     input: table_reg_index_3,
+//                     output: table_reg_index_4,
+//                     expr: Expr::ColumnRef("col2".into()),
+//                     alias: None,
+//                 },
+//                 Project {
+//                     input: table_reg_index_3,
+//                     output: table_reg_index_4,
+//                     expr: Expr::ColumnRef("col5".into()),
+//                     alias: None,
+//                 },
+//                 Return {
+//                     index: table_reg_index_4,
+//                 },
+//             ],
+//         };
 
-        // `SELECT col2, col3 FROM table1 WHERE col1 = 1 AND col2 = 2`
-        let table_reg_index = RegisterIndex::default();
-        let table_reg_index_2 = table_reg_index.next_index();
-        let _ = IntermediateCode {
-            instrs: vec![
-                Source {
-                    index: table_reg_index,
-                    name: "table1".into(),
-                },
-                Filter {
-                    index: table_reg_index,
-                    expr: Expr::Binary {
-                        left: Box::new(Expr::Binary {
-                            left: Box::new(Expr::ColumnRef("col1".into())),
-                            op: BinOp::Equal,
-                            right: Box::new(Expr::Value(value::Value::Int64(1))),
-                        }),
-                        op: BinOp::And,
-                        right: Box::new(Expr::Binary {
-                            left: Box::new(Expr::ColumnRef("col2".into())),
-                            op: BinOp::Equal,
-                            right: Box::new(Expr::Value(value::Value::Int64(2))),
-                        }),
-                    },
-                },
-                Empty {
-                    index: table_reg_index_2,
-                },
-                Project {
-                    input: table_reg_index,
-                    output: table_reg_index_2,
-                    expr: Expr::ColumnRef("col2".into()),
-                    alias: None,
-                },
-                Project {
-                    input: table_reg_index,
-                    output: table_reg_index_2,
-                    expr: Expr::ColumnRef("col3".into()),
-                    alias: None,
-                },
-                Return {
-                    index: table_reg_index_2,
-                },
-            ],
-        };
+//         // `SELECT col1, col2, col5 FROM table1 LEFT OUTER JOIN table2 ON table1.col2 = table2.col3`
+//         let table_reg_index = RegisterIndex::default();
+//         let table_reg_index_2 = table_reg_index.next_index();
+//         let table_reg_index_3 = table_reg_index_2.next_index();
+//         let table_reg_index_4 = table_reg_index_3.next_index();
+//         let _ = IntermediateCode {
+//             instrs: vec![
+//                 Source {
+//                     index: table_reg_index,
+//                     name: "table1".into(),
+//                 },
+//                 Source {
+//                     index: table_reg_index_2,
+//                     name: "table2".into(),
+//                 },
+//                 CrossJoin {
+//                     input1: table_reg_index,
+//                     input2: table_reg_index_2,
+//                     output: table_reg_index_3,
+//                 },
+//                 Filter {
+//                     index: table_reg_index_3,
+//                     expr: Expr::Binary {
+//                         left: Box::new(Expr::ColumnRef("table1.col2".into())),
+//                         op: BinOp::Equal,
+//                         right: Box::new(Expr::ColumnRef("table2.col3".into())),
+//                     },
+//                 },
+//                 // Left outer join, so don't remove NULLs from first table
+//                 // Left outer join, so remove NULLs from second table
+//                 Filter {
+//                     index: table_reg_index_3,
+//                     expr: Expr::Unary {
+//                         op: UnOp::IsNotNull,
+//                         operand: Box::new(Expr::ColumnRef(
+//                             format!("table2.{}", TABLE_UNIQUE_KEY_NAME).as_str().into(),
+//                         )),
+//                     },
+//                 },
+//                 Empty {
+//                     index: table_reg_index_4,
+//                 },
+//                 Project {
+//                     input: table_reg_index_3,
+//                     output: table_reg_index_4,
+//                     expr: Expr::ColumnRef("col1".into()),
+//                     alias: None,
+//                 },
+//                 Project {
+//                     input: table_reg_index_3,
+//                     output: table_reg_index_4,
+//                     expr: Expr::ColumnRef("col2".into()),
+//                     alias: None,
+//                 },
+//                 Project {
+//                     input: table_reg_index_3,
+//                     output: table_reg_index_4,
+//                     expr: Expr::ColumnRef("col5".into()),
+//                     alias: None,
+//                 },
+//                 Return {
+//                     index: table_reg_index_4,
+//                 },
+//             ],
+//         };
+//     }
 
-        // `SELECT col2, col3 FROM table1 WHERE col1 = 1 OR col2 = 2`
-        let table_reg_index = RegisterIndex::default();
-        let table_reg_index_2 = table_reg_index.next_index();
-        let _ = IntermediateCode {
-            instrs: vec![
-                Source {
-                    index: table_reg_index,
-                    name: "table1".into(),
-                },
-                Filter {
-                    index: table_reg_index,
-                    expr: Expr::Binary {
-                        left: Box::new(Expr::Binary {
-                            left: Box::new(Expr::ColumnRef("col1".into())),
-                            op: BinOp::Equal,
-                            right: Box::new(Expr::Value(value::Value::Int64(1))),
-                        }),
-                        op: BinOp::Or,
-                        right: Box::new(Expr::Binary {
-                            left: Box::new(Expr::ColumnRef("col2".into())),
-                            op: BinOp::Equal,
-                            right: Box::new(Expr::Value(value::Value::Int64(2))),
-                        }),
-                    },
-                },
-                Empty {
-                    index: table_reg_index_2,
-                },
-                Project {
-                    input: table_reg_index,
-                    output: table_reg_index_2,
-                    expr: Expr::ColumnRef("col2".into()),
-                    alias: None,
-                },
-                Project {
-                    input: table_reg_index,
-                    output: table_reg_index_2,
-                    expr: Expr::ColumnRef("col3".into()),
-                    alias: None,
-                },
-                Return {
-                    index: table_reg_index_2,
-                },
-            ],
-        };
-    }
+//     #[test]
+//     fn update_statements() {
+//         // TODO
+//         // `UPDATE table1 SET col2 = 'bar' WHERE col1 = 1`
 
-    #[test]
-    fn create_statements() {
-        // `CREATE DATABASE db1`
-        let _ = IntermediateCode {
-            instrs: vec![NewDatabase {
-                name: "db1".into(),
-                exists_ok: false,
-            }],
-        };
+//         // `UPDATE table1 SET col2 = 'bar' WHERE col1 = 1 AND col3 = 2`
 
-        // `CREATE SCHEMA schema1`
-        let _ = IntermediateCode {
-            instrs: vec![NewSchema {
-                db_name: Some("db1".into()),
-                schema_name: "schema1".into(),
-                exists_ok: false,
-            }],
-        };
+//         // `UPDATE table1 SET col2 = 'bar', col3 = 4 WHERE col1 = 1 AND col3 = 2`
 
-        // `CREATE TABLE IF NOT EXISTS table1 (col1 INTEGER PRIMARY KEY NOT NULL, col2 STRING NOT NULL, col3 INTEGER UNIQUE)`
-        let table_reg_index = RegisterIndex::default();
-        let col_index = table_reg_index.next_index();
-        let _ = IntermediateCode {
-            instrs: vec![
-                Empty {
-                    index: table_reg_index,
-                },
-                ColumnDef {
-                    index: col_index,
-                    name: "col1".into(),
-                    data_type: DataType::Int(None),
-                },
-                AddColumnOption {
-                    index: col_index,
-                    option: ColumnOptionDef {
-                        name: None,
-                        option: ColumnOption::Unique { is_primary: true },
-                    },
-                },
-                AddColumnOption {
-                    index: col_index,
-                    option: ColumnOptionDef {
-                        name: None,
-                        option: ColumnOption::NotNull,
-                    },
-                },
-                AddColumn {
-                    table_reg_index,
-                    col_index,
-                },
-                ColumnDef {
-                    index: col_index,
-                    name: "col2".into(),
-                    data_type: DataType::String,
-                },
-                AddColumnOption {
-                    index: col_index,
-                    option: ColumnOptionDef {
-                        name: None,
-                        option: ColumnOption::NotNull,
-                    },
-                },
-                AddColumn {
-                    table_reg_index,
-                    col_index,
-                },
-                ColumnDef {
-                    index: col_index,
-                    name: "col3".into(),
-                    data_type: DataType::Int(None),
-                },
-                AddColumnOption {
-                    index: col_index,
-                    option: ColumnOptionDef {
-                        name: None,
-                        option: ColumnOption::Unique { is_primary: false },
-                    },
-                },
-                AddColumn {
-                    table_reg_index,
-                    col_index,
-                },
-                NewTable {
-                    index: table_reg_index,
-                    name: "table1".into(),
-                    exists_ok: true,
-                },
-            ],
-        };
-    }
+//         // `UPDATE table1 SET col2 = 'bar' WHERE col1 = 1 OR col3 = 2`
 
-    #[test]
-    fn alter_statements() {
-        // `ALTER TABLE table1 ADD COLUMN col4 STRING NULL`
-        let table_reg_index = RegisterIndex::default();
-        let col_index = table_reg_index.next_index();
-        let _ = IntermediateCode {
-            instrs: vec![
-                Source {
-                    index: table_reg_index,
-                    name: "table1".into(),
-                },
-                ColumnDef {
-                    index: col_index,
-                    name: "col4".into(),
-                    data_type: DataType::String,
-                },
-                AddColumnOption {
-                    index: col_index,
-                    option: ColumnOptionDef {
-                        name: None,
-                        option: ColumnOption::Null,
-                    },
-                },
-                AddColumn {
-                    table_reg_index,
-                    col_index,
-                },
-            ],
-        };
+//         // `UPDATE table1 SET col3 = col3 + 1 WHERE col2 = 'foo'`
 
-        // `ALTER TABLE table1 RENAME COLUMN col4 col5`
-        let table_reg_index = RegisterIndex::default();
-        let _ = IntermediateCode {
-            instrs: vec![
-                Source {
-                    index: table_reg_index,
-                    name: "table1".into(),
-                },
-                RenameColumn {
-                    index: table_reg_index,
-                    old_name: "col4".into(),
-                    new_name: "col5".into(),
-                },
-            ],
-        };
-
-        // `ALTER TABLE table1 DROP COLUMN col5`
-        let table_reg_index = RegisterIndex::default();
-        let _ = IntermediateCode {
-            instrs: vec![
-                Source {
-                    index: table_reg_index,
-                    name: "table1".into(),
-                },
-                RemoveColumn {
-                    index: table_reg_index,
-                    col_name: "col5".into(),
-                },
-            ],
-        };
-    }
-
-    #[test]
-    fn select_with_joins() {
-        // `SELECT col1, col2, col5 FROM table1 INNER JOIN table2 ON table1.col2 = table2.col3`
-        let table_reg_index = RegisterIndex::default();
-        let table_reg_index_2 = table_reg_index.next_index();
-        let table_reg_index_3 = table_reg_index_2.next_index();
-        let table_reg_index_4 = table_reg_index_3.next_index();
-        let _ = IntermediateCode {
-            instrs: vec![
-                Source {
-                    index: table_reg_index,
-                    name: "table1".into(),
-                },
-                Source {
-                    index: table_reg_index_2,
-                    name: "table2".into(),
-                },
-                CrossJoin {
-                    input1: table_reg_index,
-                    input2: table_reg_index_2,
-                    output: table_reg_index_3,
-                },
-                Filter {
-                    index: table_reg_index_3,
-                    expr: Expr::Binary {
-                        left: Box::new(Expr::ColumnRef("table1.col2".into())),
-                        op: BinOp::Equal,
-                        right: Box::new(Expr::ColumnRef("table2.col3".into())),
-                    },
-                },
-                // Inner join, so remove NULLs
-                Filter {
-                    index: table_reg_index_3,
-                    expr: Expr::Unary {
-                        op: UnOp::IsNotNull,
-                        operand: Box::new(Expr::ColumnRef(
-                            format!("table1.{}", TABLE_UNIQUE_KEY_NAME).as_str().into(),
-                        )),
-                    },
-                },
-                // Inner join, so remove NULLs
-                Filter {
-                    index: table_reg_index_3,
-                    expr: Expr::Unary {
-                        op: UnOp::IsNotNull,
-                        operand: Box::new(Expr::ColumnRef(
-                            format!("table2.{}", TABLE_UNIQUE_KEY_NAME).as_str().into(),
-                        )),
-                    },
-                },
-                Empty {
-                    index: table_reg_index_4,
-                },
-                Project {
-                    input: table_reg_index_3,
-                    output: table_reg_index_4,
-                    expr: Expr::ColumnRef("col1".into()),
-                    alias: None,
-                },
-                Project {
-                    input: table_reg_index_3,
-                    output: table_reg_index_4,
-                    expr: Expr::ColumnRef("col2".into()),
-                    alias: None,
-                },
-                Project {
-                    input: table_reg_index_3,
-                    output: table_reg_index_4,
-                    expr: Expr::ColumnRef("col5".into()),
-                    alias: None,
-                },
-                Return {
-                    index: table_reg_index_4,
-                },
-            ],
-        };
-
-        // `SELECT col1, col2, col5 FROM table1, table2`
-        let table_reg_index = RegisterIndex::default();
-        let table_reg_index_2 = table_reg_index.next_index();
-        let table_reg_index_3 = table_reg_index_2.next_index();
-        let table_reg_index_4 = table_reg_index_3.next_index();
-        let _ = IntermediateCode {
-            instrs: vec![
-                Source {
-                    index: table_reg_index,
-                    name: "table1".into(),
-                },
-                Source {
-                    index: table_reg_index_2,
-                    name: "table2".into(),
-                },
-                CrossJoin {
-                    input1: table_reg_index,
-                    input2: table_reg_index_2,
-                    output: table_reg_index_3,
-                },
-                Empty {
-                    index: table_reg_index_4,
-                },
-                Project {
-                    input: table_reg_index_3,
-                    output: table_reg_index_4,
-                    expr: Expr::ColumnRef("col1".into()),
-                    alias: None,
-                },
-                Project {
-                    input: table_reg_index_3,
-                    output: table_reg_index_4,
-                    expr: Expr::ColumnRef("col2".into()),
-                    alias: None,
-                },
-                Project {
-                    input: table_reg_index_3,
-                    output: table_reg_index_4,
-                    expr: Expr::ColumnRef("col5".into()),
-                    alias: None,
-                },
-                Return {
-                    index: table_reg_index_4,
-                },
-            ],
-        };
-
-        // `SELECT col1, col2, col5 FROM table1 NATURAL JOIN table2`
-        let table_reg_index = RegisterIndex::default();
-        let table_reg_index_2 = table_reg_index.next_index();
-        let table_reg_index_3 = table_reg_index_2.next_index();
-        let table_reg_index_4 = table_reg_index_3.next_index();
-        let _ = IntermediateCode {
-            instrs: vec![
-                Source {
-                    index: table_reg_index,
-                    name: "table1".into(),
-                },
-                Source {
-                    index: table_reg_index_2,
-                    name: "table2".into(),
-                },
-                NaturalJoin {
-                    input1: table_reg_index,
-                    input2: table_reg_index_2,
-                    output: table_reg_index_3,
-                },
-                // Not an outer join, so remove NULLs
-                Filter {
-                    index: table_reg_index_3,
-                    expr: Expr::Unary {
-                        op: UnOp::IsNotNull,
-                        operand: Box::new(Expr::ColumnRef(
-                            format!("table1.{}", TABLE_UNIQUE_KEY_NAME).as_str().into(),
-                        )),
-                    },
-                },
-                // Not an outer join, so remove NULLs
-                Filter {
-                    index: table_reg_index_3,
-                    expr: Expr::Unary {
-                        op: UnOp::IsNotNull,
-                        operand: Box::new(Expr::ColumnRef(
-                            format!("table2.{}", TABLE_UNIQUE_KEY_NAME).as_str().into(),
-                        )),
-                    },
-                },
-                Empty {
-                    index: table_reg_index_4,
-                },
-                Project {
-                    input: table_reg_index_3,
-                    output: table_reg_index_4,
-                    expr: Expr::ColumnRef("col1".into()),
-                    alias: None,
-                },
-                Project {
-                    input: table_reg_index_3,
-                    output: table_reg_index_4,
-                    expr: Expr::ColumnRef("col2".into()),
-                    alias: None,
-                },
-                Project {
-                    input: table_reg_index_3,
-                    output: table_reg_index_4,
-                    expr: Expr::ColumnRef("col5".into()),
-                    alias: None,
-                },
-                Return {
-                    index: table_reg_index_4,
-                },
-            ],
-        };
-
-        // `SELECT col1, col2, col5 FROM table1 LEFT OUTER JOIN table2 ON table1.col2 = table2.col3`
-        let table_reg_index = RegisterIndex::default();
-        let table_reg_index_2 = table_reg_index.next_index();
-        let table_reg_index_3 = table_reg_index_2.next_index();
-        let table_reg_index_4 = table_reg_index_3.next_index();
-        let _ = IntermediateCode {
-            instrs: vec![
-                Source {
-                    index: table_reg_index,
-                    name: "table1".into(),
-                },
-                Source {
-                    index: table_reg_index_2,
-                    name: "table2".into(),
-                },
-                CrossJoin {
-                    input1: table_reg_index,
-                    input2: table_reg_index_2,
-                    output: table_reg_index_3,
-                },
-                Filter {
-                    index: table_reg_index_3,
-                    expr: Expr::Binary {
-                        left: Box::new(Expr::ColumnRef("table1.col2".into())),
-                        op: BinOp::Equal,
-                        right: Box::new(Expr::ColumnRef("table2.col3".into())),
-                    },
-                },
-                // Left outer join, so don't remove NULLs from first table
-                // Left outer join, so remove NULLs from second table
-                Filter {
-                    index: table_reg_index_3,
-                    expr: Expr::Unary {
-                        op: UnOp::IsNotNull,
-                        operand: Box::new(Expr::ColumnRef(
-                            format!("table2.{}", TABLE_UNIQUE_KEY_NAME).as_str().into(),
-                        )),
-                    },
-                },
-                Empty {
-                    index: table_reg_index_4,
-                },
-                Project {
-                    input: table_reg_index_3,
-                    output: table_reg_index_4,
-                    expr: Expr::ColumnRef("col1".into()),
-                    alias: None,
-                },
-                Project {
-                    input: table_reg_index_3,
-                    output: table_reg_index_4,
-                    expr: Expr::ColumnRef("col2".into()),
-                    alias: None,
-                },
-                Project {
-                    input: table_reg_index_3,
-                    output: table_reg_index_4,
-                    expr: Expr::ColumnRef("col5".into()),
-                    alias: None,
-                },
-                Return {
-                    index: table_reg_index_4,
-                },
-            ],
-        };
-    }
-
-    #[test]
-    fn insert_statements() {
-        // TODO
-        // `INSERT INTO table1 VALUES (1, 'foo', 2)`
-
-        // `INSERT INTO table1 (col1, col2) VALUES (1, 'foo')`
-
-        // `INSERT INTO table1 VALUES (2, 'bar', 3), (3, 'baz', 4)`
-    }
-
-    #[test]
-    fn update_statements() {
-        // TODO
-        // `UPDATE table1 SET col2 = 'bar' WHERE col1 = 1`
-
-        // `UPDATE table1 SET col2 = 'bar' WHERE col1 = 1 AND col3 = 2`
-
-        // `UPDATE table1 SET col2 = 'bar', col3 = 4 WHERE col1 = 1 AND col3 = 2`
-
-        // `UPDATE table1 SET col2 = 'bar' WHERE col1 = 1 OR col3 = 2`
-
-        // `UPDATE table1 SET col3 = col3 + 1 WHERE col2 = 'foo'`
-
-        // `UPDATE table1, table2 SET table1.col3 = table1.col3 + 1 WHERE table2.col2 = 'foo'`
-    }
-}
+//         // `UPDATE table1, table2 SET table1.col3 = table1.col3 + 1 WHERE table2.col2 = 'foo'`
+//     }
+// }
