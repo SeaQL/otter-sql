@@ -78,7 +78,7 @@ impl TryFrom<ast::Value> for Value {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ValueError {
     pub reason: &'static str,
     pub value: ast::Value,
@@ -92,6 +92,10 @@ impl Display for ValueError {
 
 #[cfg(test)]
 mod tests {
+    use sqlparser::ast;
+
+    use crate::value::ValueError;
+
     use super::Value;
 
     #[test]
@@ -99,5 +103,48 @@ mod tests {
         let value = Value::Null;
         assert_eq!(value, Value::Null);
         assert!(value != Value::String("test".to_owned()));
+    }
+
+    #[test]
+    fn conversion_from_ast() {
+        assert_eq!(Value::try_from(ast::Value::Null), Ok(Value::Null));
+
+        assert_eq!(
+            Value::try_from(ast::Value::Number("1000".to_owned(), false)),
+            Ok(Value::Int64(1000))
+        );
+
+        assert_eq!(
+            Value::try_from(ast::Value::Number("1000".to_owned(), true)),
+            Ok(Value::Int64(1000))
+        );
+
+        assert_eq!(
+            Value::try_from(ast::Value::Number("1000.0".to_owned(), false)),
+            Ok(Value::Float64(1000.0))
+        );
+
+        assert_eq!(
+            Value::try_from(ast::Value::Number("0.300000000000000004".to_owned(), false)),
+            Ok(Value::Float64(0.300000000000000004))
+        );
+
+        assert_eq!(
+            Value::try_from(ast::Value::Number("-1".to_owned(), false)),
+            Ok(Value::Int64(-1))
+        );
+
+        assert_eq!(
+            Value::try_from(ast::Value::Number("9223372036854775807".to_owned(), false)),
+            Ok(Value::Int64(9223372036854775807))
+        );
+
+        assert_eq!(
+            Value::try_from(ast::Value::HexStringLiteral("brr".to_owned())),
+            Err(ValueError {
+                reason: "Unsupported value format",
+                value: ast::Value::HexStringLiteral("brr".to_owned())
+            })
+        )
     }
 }
