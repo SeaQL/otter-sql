@@ -65,8 +65,8 @@ pub enum UnOp {
 
 impl TryFrom<ast::Expr> for Expr {
     type Error = ExprError;
-    fn try_from(value: ast::Expr) -> Result<Self, Self::Error> {
-        match value {
+    fn try_from(expr_ast: ast::Expr) -> Result<Self, Self::Error> {
+        match expr_ast {
             ast::Expr::Identifier(i) => Ok(Expr::ColumnRef(vec![i].try_into()?)),
             ast::Expr::CompoundIdentifier(i) => Ok(Expr::ColumnRef(i.try_into()?)),
             ast::Expr::IsFalse(e) => Ok(Expr::Unary {
@@ -137,19 +137,19 @@ impl TryFrom<ast::Expr> for Expr {
                             ast::FunctionArgExpr::Wildcard => Ok(Expr::Wildcard),
                             ast::FunctionArgExpr::QualifiedWildcard(_) => Err(ExprError::Expr {
                                 reason: "Qualified wildcards are not supported yet",
-                                expr: value.clone(),
+                                expr: expr_ast.clone(),
                             }),
                         },
                         ast::FunctionArg::Named { .. } => Err(ExprError::Expr {
                             reason: "Named function arguments are not supported",
-                            expr: value.clone(),
+                            expr: expr_ast.clone(),
                         }),
                     })
                     .collect::<Result<Vec<_>, _>>()?,
             }),
             _ => Err(ExprError::Expr {
                 reason: "Unsupported expression",
-                expr: value,
+                expr: expr_ast,
             }),
         }
     }
@@ -200,7 +200,7 @@ impl TryFrom<ast::UnaryOperator> for UnOp {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ExprError {
     Expr {
         reason: &'static str,
@@ -249,3 +249,150 @@ impl From<IdentifierError> for ExprError {
 }
 
 impl Error for ExprError {}
+
+#[cfg(test)]
+mod tests {
+    use sqlparser::{ast, dialect::GenericDialect, parser::Parser, tokenizer::Tokenizer};
+
+    use crate::{
+        expr::{BinOp, Expr, UnOp},
+        identifier::ColumnRef,
+        value::Value,
+    };
+
+    #[test]
+    fn conversion_from_ast() {
+        fn parse_expr(s: &str) -> ast::Expr {
+            let dialect = GenericDialect {};
+            let mut tokenizer = Tokenizer::new(&dialect, s);
+            let tokens = tokenizer.tokenize().unwrap();
+            let mut parser = Parser::new(tokens, &dialect);
+            parser.parse_expr().unwrap()
+        }
+
+        assert_eq!(
+            parse_expr("abc").try_into(),
+            Ok(Expr::ColumnRef(ColumnRef {
+                schema_name: None,
+                table_name: None,
+                col_name: "abc".into()
+            }))
+        );
+
+        assert_ne!(
+            parse_expr("abc").try_into(),
+            Ok(Expr::ColumnRef(ColumnRef {
+                schema_name: None,
+                table_name: None,
+                col_name: "cab".into()
+            }))
+        );
+
+        assert_eq!(
+            parse_expr("table1.col1").try_into(),
+            Ok(Expr::ColumnRef(ColumnRef {
+                schema_name: None,
+                table_name: Some("table1".into()),
+                col_name: "col1".into()
+            }))
+        );
+
+        assert_eq!(
+            parse_expr("schema1.table1.col1").try_into(),
+            Ok(Expr::ColumnRef(ColumnRef {
+                schema_name: Some("schema1".into()),
+                table_name: Some("table1".into()),
+                col_name: "col1".into()
+            }))
+        );
+
+        assert_eq!(
+            parse_expr("5 IS NULL").try_into(),
+            Ok(Expr::Unary {
+                op: UnOp::IsNull,
+                operand: Box::new(Expr::Value(Value::Int64(5)))
+            })
+        );
+
+        assert_eq!(
+            parse_expr("1 IS TRUE").try_into(),
+            Ok(Expr::Unary {
+                op: UnOp::IsTrue,
+                operand: Box::new(Expr::Value(Value::Int64(1)))
+            })
+        );
+
+        assert_eq!(
+            parse_expr("4 BETWEEN 3 AND 5").try_into(),
+            Ok(Expr::Binary {
+                left: Box::new(Expr::Binary {
+                    left: Box::new(Expr::Value(Value::Int64(3))),
+                    op: BinOp::LessThanOrEqual,
+                    right: Box::new(Expr::Value(Value::Int64(4)))
+                }),
+                op: BinOp::And,
+                right: Box::new(Expr::Binary {
+                    left: Box::new(Expr::Value(Value::Int64(4))),
+                    op: BinOp::LessThanOrEqual,
+                    right: Box::new(Expr::Value(Value::Int64(5)))
+                })
+            })
+        );
+
+        assert_eq!(
+            parse_expr("4 NOT BETWEEN 3 AND 5").try_into(),
+            Ok(Expr::Unary {
+                op: UnOp::Not,
+                operand: Box::new(Expr::Binary {
+                    left: Box::new(Expr::Binary {
+                        left: Box::new(Expr::Value(Value::Int64(3))),
+                        op: BinOp::LessThanOrEqual,
+                        right: Box::new(Expr::Value(Value::Int64(4)))
+                    }),
+                    op: BinOp::And,
+                    right: Box::new(Expr::Binary {
+                        left: Box::new(Expr::Value(Value::Int64(4))),
+                        op: BinOp::LessThanOrEqual,
+                        right: Box::new(Expr::Value(Value::Int64(5)))
+                    })
+                })
+            })
+        );
+
+        assert_eq!(
+            parse_expr("MAX(col1)").try_into(),
+            Ok(Expr::Function {
+                name: "MAX".into(),
+                args: vec![Expr::ColumnRef(ColumnRef {
+                    schema_name: None,
+                    table_name: None,
+                    col_name: "col1".into()
+                })]
+            })
+        );
+
+        assert_eq!(
+            parse_expr("some_func(col1, 1, 'abc')").try_into(),
+            Ok(Expr::Function {
+                name: "some_func".into(),
+                args: vec![
+                    Expr::ColumnRef(ColumnRef {
+                        schema_name: None,
+                        table_name: None,
+                        col_name: "col1".into()
+                    }),
+                    Expr::Value(Value::Int64(1)),
+                    Expr::Value(Value::String("abc".to_owned()))
+                ]
+            })
+        );
+
+        assert_eq!(
+            parse_expr("COUNT(*)").try_into(),
+            Ok(Expr::Function {
+                name: "COUNT".into(),
+                args: vec![Expr::Wildcard]
+            })
+        );
+    }
+}

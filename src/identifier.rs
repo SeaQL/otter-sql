@@ -98,7 +98,7 @@ impl TryFrom<Vec<Ident>> for ColumnRef {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct IdentifierError {
     idents: Vec<Ident>,
     reason: &'static str,
