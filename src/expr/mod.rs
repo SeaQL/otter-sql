@@ -10,6 +10,8 @@ use crate::{
     BoundedString,
 };
 
+pub mod eval;
+
 /// An expression
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
