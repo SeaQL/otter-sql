@@ -1,3 +1,7 @@
+use std::fmt::Display;
+
+use sqlparser::ast;
+
 /// A value contained within a table's cell.
 ///
 /// One or more column types may be mapped to a single variant of [`Value`].
@@ -43,8 +47,55 @@ pub enum Value {
     Binary(Vec<u8>),
 }
 
+impl TryFrom<ast::Value> for Value {
+    type Error = ValueError;
+
+    fn try_from(val: ast::Value) -> Result<Self, Self::Error> {
+        match val {
+            ast::Value::Null => Ok(Value::Null),
+            ast::Value::Boolean(b) => Ok(Value::Bool(b)),
+            ast::Value::SingleQuotedString(s) => Ok(Value::String(s)),
+            ast::Value::DoubleQuotedString(s) => Ok(Value::String(s)),
+            ast::Value::Number(ref s, _long) => {
+                if let Ok(int) = s.parse::<i64>() {
+                    Ok(Value::Int64(int))
+                } else {
+                    if let Ok(float) = s.parse::<f64>() {
+                        Ok(Value::Float64(float))
+                    } else {
+                        Err(ValueError {
+                            reason: "Unsupported number format",
+                            value: val.clone(),
+                        })
+                    }
+                }
+            }
+            _ => Err(ValueError {
+                reason: "Unsupported value format",
+                value: val,
+            }),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ValueError {
+    pub reason: &'static str,
+    pub value: ast::Value,
+}
+
+impl Display for ValueError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "ValueError: {}: {}", self.reason, self.value)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use sqlparser::ast;
+
+    use crate::value::ValueError;
+
     use super::Value;
 
     #[test]
@@ -52,5 +103,48 @@ mod tests {
         let value = Value::Null;
         assert_eq!(value, Value::Null);
         assert!(value != Value::String("test".to_owned()));
+    }
+
+    #[test]
+    fn conversion_from_ast() {
+        assert_eq!(Value::try_from(ast::Value::Null), Ok(Value::Null));
+
+        assert_eq!(
+            Value::try_from(ast::Value::Number("1000".to_owned(), false)),
+            Ok(Value::Int64(1000))
+        );
+
+        assert_eq!(
+            Value::try_from(ast::Value::Number("1000".to_owned(), true)),
+            Ok(Value::Int64(1000))
+        );
+
+        assert_eq!(
+            Value::try_from(ast::Value::Number("1000.0".to_owned(), false)),
+            Ok(Value::Float64(1000.0))
+        );
+
+        assert_eq!(
+            Value::try_from(ast::Value::Number("0.300000000000000004".to_owned(), false)),
+            Ok(Value::Float64(0.300000000000000004))
+        );
+
+        assert_eq!(
+            Value::try_from(ast::Value::Number("-1".to_owned(), false)),
+            Ok(Value::Int64(-1))
+        );
+
+        assert_eq!(
+            Value::try_from(ast::Value::Number("9223372036854775807".to_owned(), false)),
+            Ok(Value::Int64(9223372036854775807))
+        );
+
+        assert_eq!(
+            Value::try_from(ast::Value::HexStringLiteral("brr".to_owned())),
+            Err(ValueError {
+                reason: "Unsupported value format",
+                value: ast::Value::HexStringLiteral("brr".to_owned())
+            })
+        )
     }
 }

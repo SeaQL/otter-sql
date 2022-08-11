@@ -1,16 +1,18 @@
+mod codegen;
 mod column;
 mod database;
 mod expr;
 mod ic;
+mod identifier;
+mod parser;
 mod schema;
 mod table;
 mod value;
 mod vm;
 
 pub use database::Database;
+use identifier::BoundedString;
 pub use vm::VirtualMachine;
-
-use arraystring::{typenum::U63, ArrayString};
 
 /// `Mrc` stands for "maybe-atomic Rc".
 /// It's an `Arc` if thread safety is enabled, `Rc` otherwise.
@@ -18,6 +20,3 @@ use arraystring::{typenum::U63, ArrayString};
 use std::rc::Rc as Mrc;
 #[cfg(feature = "thread-safe")]
 use std::sync::Arc as Mrc;
-
-/// A fixed capacity copy-able string.
-type BoundedString = ArrayString<U63>;
