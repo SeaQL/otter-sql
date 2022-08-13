@@ -1,6 +1,8 @@
-use std::fmt::Display;
+use std::{fmt::Display, ops::Add};
 
 use sqlparser::ast;
+
+use crate::expr::BinOp;
 
 /// A value contained within a table's cell.
 ///
@@ -75,6 +77,117 @@ impl TryFrom<ast::Value> for Value {
                 value: val,
             }),
         }
+    }
+}
+
+impl Add for Value {
+    type Output = Result<Value, ValueBinaryOpError>;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        match self {
+            Value::Null => Err(ValueBinaryOpError {
+                operator: BinOp::Plus,
+                values: (self, rhs),
+            }),
+            Value::Bool(_) => Err(ValueBinaryOpError {
+                operator: BinOp::Plus,
+                values: (self, rhs),
+            }),
+            Value::UInt8(lhs) => match rhs {
+                Value::UInt8(rhs) => Ok(Value::UInt8(lhs + rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Plus,
+                    values: (self, rhs),
+                }),
+            },
+            Value::Int8(lhs) => match rhs {
+                Value::Int8(rhs) => Ok(Value::Int8(lhs + rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Plus,
+                    values: (self, rhs),
+                }),
+            },
+            Value::UInt16(lhs) => match rhs {
+                Value::UInt16(rhs) => Ok(Value::UInt16(lhs + rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Plus,
+                    values: (self, rhs),
+                }),
+            },
+            Value::Int16(lhs) => match rhs {
+                Value::Int16(rhs) => Ok(Value::Int16(lhs + rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Plus,
+                    values: (self, rhs),
+                }),
+            },
+            Value::UInt32(lhs) => match rhs {
+                Value::UInt32(rhs) => Ok(Value::UInt32(lhs + rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Plus,
+                    values: (self, rhs),
+                }),
+            },
+            Value::Int32(lhs) => match rhs {
+                Value::Int32(rhs) => Ok(Value::Int32(lhs + rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Plus,
+                    values: (self, rhs),
+                }),
+            },
+            Value::UInt64(lhs) => match rhs {
+                Value::UInt64(rhs) => Ok(Value::UInt64(lhs + rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Plus,
+                    values: (self, rhs),
+                }),
+            },
+            Value::Int64(lhs) => match rhs {
+                Value::Int64(rhs) => Ok(Value::Int64(lhs + rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Plus,
+                    values: (self, rhs),
+                }),
+            },
+            Value::Float32(lhs) => match rhs {
+                Value::Float32(rhs) => Ok(Value::Float32(lhs + rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Plus,
+                    values: (self, rhs),
+                }),
+            },
+            Value::Float64(lhs) => match rhs {
+                Value::Float64(rhs) => Ok(Value::Float64(lhs + rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Plus,
+                    values: (self, rhs),
+                }),
+            },
+            Value::String(_) => Err(ValueBinaryOpError {
+                operator: BinOp::Plus,
+                values: (self, rhs),
+            }),
+            Value::Binary(_) => Err(ValueBinaryOpError {
+                operator: BinOp::Plus,
+                values: (self, rhs),
+            }),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ValueBinaryOpError {
+    pub operator: BinOp,
+    pub values: (Value, Value),
+}
+
+impl Display for ValueBinaryOpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "ValueBinaryOpError: unsupported operation '{}' between '{:?}' and '{:?}'",
+            self.operator, self.values.0, self.values.1
+        )
     }
 }
 

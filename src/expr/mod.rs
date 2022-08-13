@@ -53,6 +53,32 @@ pub enum BinOp {
     Or,
 }
 
+impl Display for BinOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                BinOp::Plus => "+",
+                BinOp::Minus => "-",
+                BinOp::Multiply => "*",
+                BinOp::Divide => "/",
+                BinOp::Modulo => "%",
+                BinOp::Equal => "=",
+                BinOp::NotEqual => "!=",
+                BinOp::LessThan => "<",
+                BinOp::LessThanOrEqual => "<=",
+                BinOp::GreaterThan => ">",
+                BinOp::GreaterThanOrEqual => ">=",
+                BinOp::Like => "LIKE",
+                BinOp::ILike => "ILIKE",
+                BinOp::And => "AND",
+                BinOp::Or => "OR",
+            }
+        )
+    }
+}
+
 /// A unary operator
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum UnOp {
