@@ -15,20 +15,7 @@ pub enum Value {
 
     // integer types
     // reference: https://dev.mysql.com/doc/refman/8.0/en/integer-types.html
-    UInt8(u8),
-
-    Int8(i8),
-
-    UInt16(u16),
-
-    Int16(i16),
-
-    UInt32(u32),
-
-    Int32(i32),
-
-    UInt64(u64),
-
+    // TODO: other integer types. Currently, all integers are casted to Int64.
     Int64(i64),
 
     // TODO: exact value fixed point types - Decimal and Numeric
@@ -36,8 +23,7 @@ pub enum Value {
     // floating point types
     // reference: https://dev.mysql.com/doc/refman/8.0/en/floating-point-types.html
     // note: specifying exact precision and digits is not supported yet
-    Float32(f32),
-
+    // TODO: Float32
     Float64(f64),
 
     // TODO: date and timestamp
@@ -93,64 +79,8 @@ impl Add for Value {
                 operator: BinOp::Plus,
                 values: (self, rhs),
             }),
-            Value::UInt8(lhs) => match rhs {
-                Value::UInt8(rhs) => Ok(Value::UInt8(lhs + rhs)),
-                _ => Err(ValueBinaryOpError {
-                    operator: BinOp::Plus,
-                    values: (self, rhs),
-                }),
-            },
-            Value::Int8(lhs) => match rhs {
-                Value::Int8(rhs) => Ok(Value::Int8(lhs + rhs)),
-                _ => Err(ValueBinaryOpError {
-                    operator: BinOp::Plus,
-                    values: (self, rhs),
-                }),
-            },
-            Value::UInt16(lhs) => match rhs {
-                Value::UInt16(rhs) => Ok(Value::UInt16(lhs + rhs)),
-                _ => Err(ValueBinaryOpError {
-                    operator: BinOp::Plus,
-                    values: (self, rhs),
-                }),
-            },
-            Value::Int16(lhs) => match rhs {
-                Value::Int16(rhs) => Ok(Value::Int16(lhs + rhs)),
-                _ => Err(ValueBinaryOpError {
-                    operator: BinOp::Plus,
-                    values: (self, rhs),
-                }),
-            },
-            Value::UInt32(lhs) => match rhs {
-                Value::UInt32(rhs) => Ok(Value::UInt32(lhs + rhs)),
-                _ => Err(ValueBinaryOpError {
-                    operator: BinOp::Plus,
-                    values: (self, rhs),
-                }),
-            },
-            Value::Int32(lhs) => match rhs {
-                Value::Int32(rhs) => Ok(Value::Int32(lhs + rhs)),
-                _ => Err(ValueBinaryOpError {
-                    operator: BinOp::Plus,
-                    values: (self, rhs),
-                }),
-            },
-            Value::UInt64(lhs) => match rhs {
-                Value::UInt64(rhs) => Ok(Value::UInt64(lhs + rhs)),
-                _ => Err(ValueBinaryOpError {
-                    operator: BinOp::Plus,
-                    values: (self, rhs),
-                }),
-            },
             Value::Int64(lhs) => match rhs {
                 Value::Int64(rhs) => Ok(Value::Int64(lhs + rhs)),
-                _ => Err(ValueBinaryOpError {
-                    operator: BinOp::Plus,
-                    values: (self, rhs),
-                }),
-            },
-            Value::Float32(lhs) => match rhs {
-                Value::Float32(rhs) => Ok(Value::Float32(lhs + rhs)),
                 _ => Err(ValueBinaryOpError {
                     operator: BinOp::Plus,
                     values: (self, rhs),

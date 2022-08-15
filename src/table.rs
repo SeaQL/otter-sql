@@ -47,7 +47,7 @@ impl Table {
     }
 
     pub fn new_row(&mut self, mut data: Vec<Value>) {
-        data.insert(0, Value::UInt64(self.row_id));
+        data.insert(0, Value::Int64(self.row_id as i64));
         self.data.push(Row { data });
         self.row_id += 1;
     }
