@@ -91,6 +91,24 @@ pub enum UnOp {
     IsNotNull,
 }
 
+impl Display for UnOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                UnOp::Plus => "+",
+                UnOp::Minus => "-",
+                UnOp::Not => "NOT",
+                UnOp::IsFalse => "IS FALSE",
+                UnOp::IsTrue => "IS TRUE",
+                UnOp::IsNull => "IS NULL",
+                UnOp::IsNotNull => "IS NOT NULL",
+            }
+        )
+    }
+}
+
 impl TryFrom<ast::Expr> for Expr {
     type Error = ExprError;
     fn try_from(expr_ast: ast::Expr) -> Result<Self, Self::Error> {
