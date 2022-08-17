@@ -33,6 +33,27 @@ pub enum Expr {
     },
 }
 
+impl Display for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Value(v) => write!(f, "{}", v),
+            Self::ColumnRef(c) => write!(f, "column '{}'", c),
+            Self::Wildcard => write!(f, "*"),
+            Self::Binary { left, op, right } => write!(f, "{} {} {}", left, op, right),
+            Self::Unary { op, operand } => write!(f, "{}{}", op, operand),
+            Self::Function { name, args } => write!(
+                f,
+                "{}({})",
+                name,
+                args.iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+        }
+    }
+}
+
 /// A binary operator
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum BinOp {

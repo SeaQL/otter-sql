@@ -38,6 +38,19 @@ pub enum Value {
     Binary(Vec<u8>),
 }
 
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Null => write!(f, "NULL"),
+            Self::Bool(v) => write!(f, "{}", v),
+            Self::Int64(v) => write!(f, "{}", v),
+            Self::Float64(v) => write!(f, "{}", v),
+            Self::String(v) => write!(f, "{}", v),
+            Self::Binary(v) => write!(f, "{:?}", v),
+        }
+    }
+}
+
 impl Value {
     pub fn is_true(self) -> Result<Value, ValueUnaryOpError> {
         match self {
