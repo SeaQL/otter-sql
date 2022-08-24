@@ -147,14 +147,12 @@ impl Add for Value {
 
     fn add(self, rhs: Self) -> Self::Output {
         match self {
-            Value::Null => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
-            Value::Bool(_) => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
+            Value::Null | Value::Bool(_) | Value::String(_) | Value::Binary(_) => {
+                Err(ValueBinaryOpError {
+                    operator: BinOp::Plus,
+                    values: (self, rhs),
+                })
+            }
             Value::Int64(lhs) => match rhs {
                 Value::Int64(rhs) => Ok(Value::Int64(lhs + rhs)),
                 _ => Err(ValueBinaryOpError {
@@ -169,14 +167,6 @@ impl Add for Value {
                     values: (self, rhs),
                 }),
             },
-            Value::String(_) => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
-            Value::Binary(_) => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
         }
     }
 }
@@ -186,36 +176,26 @@ impl Sub for Value {
 
     fn sub(self, rhs: Self) -> Self::Output {
         match self {
-            Value::Null => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
-            Value::Bool(_) => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
+            Value::Null | Value::Bool(_) | Value::String(_) | Value::Binary(_) => {
+                Err(ValueBinaryOpError {
+                    operator: BinOp::Minus,
+                    values: (self, rhs),
+                })
+            }
             Value::Int64(lhs) => match rhs {
                 Value::Int64(rhs) => Ok(Value::Int64(lhs - rhs)),
                 _ => Err(ValueBinaryOpError {
-                    operator: BinOp::Plus,
+                    operator: BinOp::Minus,
                     values: (self, rhs),
                 }),
             },
             Value::Float64(lhs) => match rhs {
                 Value::Float64(rhs) => Ok(Value::Float64(lhs - rhs)),
                 _ => Err(ValueBinaryOpError {
-                    operator: BinOp::Plus,
+                    operator: BinOp::Minus,
                     values: (self, rhs),
                 }),
             },
-            Value::String(_) => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
-            Value::Binary(_) => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
         }
     }
 }
@@ -225,36 +205,26 @@ impl Mul for Value {
 
     fn mul(self, rhs: Self) -> Self::Output {
         match self {
-            Value::Null => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
-            Value::Bool(_) => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
+            Value::Null | Value::Bool(_) | Value::String(_) | Value::Binary(_) => {
+                Err(ValueBinaryOpError {
+                    operator: BinOp::Multiply,
+                    values: (self, rhs),
+                })
+            }
             Value::Int64(lhs) => match rhs {
                 Value::Int64(rhs) => Ok(Value::Int64(lhs * rhs)),
                 _ => Err(ValueBinaryOpError {
-                    operator: BinOp::Plus,
+                    operator: BinOp::Multiply,
                     values: (self, rhs),
                 }),
             },
             Value::Float64(lhs) => match rhs {
                 Value::Float64(rhs) => Ok(Value::Float64(lhs * rhs)),
                 _ => Err(ValueBinaryOpError {
-                    operator: BinOp::Plus,
+                    operator: BinOp::Multiply,
                     values: (self, rhs),
                 }),
             },
-            Value::String(_) => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
-            Value::Binary(_) => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
         }
     }
 }
@@ -264,36 +234,26 @@ impl Div for Value {
 
     fn div(self, rhs: Self) -> Self::Output {
         match self {
-            Value::Null => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
-            Value::Bool(_) => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
+            Value::Null | Value::Bool(_) | Value::String(_) | Value::Binary(_) => {
+                Err(ValueBinaryOpError {
+                    operator: BinOp::Divide,
+                    values: (self, rhs),
+                })
+            }
             Value::Int64(lhs) => match rhs {
                 Value::Int64(rhs) => Ok(Value::Int64(lhs / rhs)),
                 _ => Err(ValueBinaryOpError {
-                    operator: BinOp::Plus,
+                    operator: BinOp::Divide,
                     values: (self, rhs),
                 }),
             },
             Value::Float64(lhs) => match rhs {
                 Value::Float64(rhs) => Ok(Value::Float64(lhs / rhs)),
                 _ => Err(ValueBinaryOpError {
-                    operator: BinOp::Plus,
+                    operator: BinOp::Divide,
                     values: (self, rhs),
                 }),
             },
-            Value::String(_) => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
-            Value::Binary(_) => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
         }
     }
 }
@@ -303,36 +263,26 @@ impl Rem for Value {
 
     fn rem(self, rhs: Self) -> Self::Output {
         match self {
-            Value::Null => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
-            Value::Bool(_) => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
+            Value::Null | Value::Bool(_) | Value::String(_) | Value::Binary(_) => {
+                Err(ValueBinaryOpError {
+                    operator: BinOp::Modulo,
+                    values: (self, rhs),
+                })
+            }
             Value::Int64(lhs) => match rhs {
                 Value::Int64(rhs) => Ok(Value::Int64(lhs % rhs)),
                 _ => Err(ValueBinaryOpError {
-                    operator: BinOp::Plus,
+                    operator: BinOp::Modulo,
                     values: (self, rhs),
                 }),
             },
             Value::Float64(lhs) => match rhs {
                 Value::Float64(rhs) => Ok(Value::Float64(lhs % rhs)),
                 _ => Err(ValueBinaryOpError {
-                    operator: BinOp::Plus,
+                    operator: BinOp::Modulo,
                     values: (self, rhs),
                 }),
             },
-            Value::String(_) => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
-            Value::Binary(_) => Err(ValueBinaryOpError {
-                operator: BinOp::Plus,
-                values: (self, rhs),
-            }),
         }
     }
 }
@@ -342,24 +292,14 @@ impl Neg for Value {
 
     fn neg(self) -> Self::Output {
         match self {
-            Value::Null => Err(ValueUnaryOpError {
-                operator: UnOp::Minus,
-                value: self,
-            }),
-            Value::Bool(_) => Err(ValueUnaryOpError {
-                operator: UnOp::Minus,
-                value: self,
-            }),
+            Value::Null | Value::Bool(_) | Value::String(_) | Value::Binary(_) => {
+                Err(ValueUnaryOpError {
+                    operator: UnOp::Minus,
+                    value: self,
+                })
+            }
             Value::Int64(lhs) => Ok(Value::Int64(-lhs)),
             Value::Float64(lhs) => Ok(Value::Float64(-lhs)),
-            Value::String(_) => Err(ValueUnaryOpError {
-                operator: UnOp::Minus,
-                value: self,
-            }),
-            Value::Binary(_) => Err(ValueUnaryOpError {
-                operator: UnOp::Minus,
-                value: self,
-            }),
         }
     }
 }
