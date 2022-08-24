@@ -19,28 +19,15 @@ impl Expr {
                 op: BinOp::And,
                 right,
             } => {
-                // we handle short circuit evaluation here
                 let left = Expr::execute(*left, context)?;
-                if let Value::Bool(b) = left {
-                    if !b {
-                        return Ok(Value::Bool(false));
-                    }
-                } else {
-                    let right = Expr::execute(*right, context)?;
-                    return Err(ExprExecError::ValueBinaryOpError(ValueBinaryOpError {
-                        operator: BinOp::And,
-                        values: (left, right),
-                    }));
-                };
-
                 let right = Expr::execute(*right, context)?;
-                if let Value::Bool(b) = right {
-                    Ok(Value::Bool(b))
-                } else {
-                    Err(ExprExecError::ValueBinaryOpError(ValueBinaryOpError {
+
+                match (&left, &right) {
+                    (Value::Bool(left), Value::Bool(right)) => Ok(Value::Bool(*left && *right)),
+                    _ => Err(ExprExecError::ValueBinaryOpError(ValueBinaryOpError {
                         operator: BinOp::And,
                         values: (left, right),
-                    }))
+                    })),
                 }
             }
             Expr::Binary {
@@ -48,28 +35,15 @@ impl Expr {
                 op: BinOp::Or,
                 right,
             } => {
-                // we handle short circuit evaluation here
                 let left = Expr::execute(*left, context)?;
-                if let Value::Bool(b) = left {
-                    if b {
-                        return Ok(Value::Bool(true));
-                    }
-                } else {
-                    let right = Expr::execute(*right, context)?;
-                    return Err(ExprExecError::ValueBinaryOpError(ValueBinaryOpError {
-                        operator: BinOp::Or,
-                        values: (left, right),
-                    }));
-                };
-
                 let right = Expr::execute(*right, context)?;
-                if let Value::Bool(b) = right {
-                    Ok(Value::Bool(b))
-                } else {
-                    Err(ExprExecError::ValueBinaryOpError(ValueBinaryOpError {
+
+                match (&left, &right) {
+                    (Value::Bool(left), Value::Bool(right)) => Ok(Value::Bool(*left || *right)),
+                    _ => Err(ExprExecError::ValueBinaryOpError(ValueBinaryOpError {
                         operator: BinOp::Or,
                         values: (left, right),
-                    }))
+                    })),
                 }
             }
             Expr::Binary { left, op, right } => {
@@ -191,7 +165,14 @@ mod test {
         assert_eq!(exec_str("true and false"), Ok(Value::Bool(false)));
         assert_eq!(exec_str("false and true"), Ok(Value::Bool(false)));
         assert_eq!(exec_str("false and false"), Ok(Value::Bool(false)));
-        assert_eq!(exec_str("false and 10"), Ok(Value::Bool(false)));
+        assert_eq!(
+            exec_str("false and 10"),
+            Err(ValueBinaryOpError {
+                operator: BinOp::And,
+                values: (Value::Bool(false), Value::Int64(10))
+            }
+            .into())
+        );
         assert_eq!(
             exec_str("10 and false"),
             Err(ValueBinaryOpError {
@@ -205,7 +186,14 @@ mod test {
         assert_eq!(exec_str("true or false"), Ok(Value::Bool(true)));
         assert_eq!(exec_str("false or true"), Ok(Value::Bool(true)));
         assert_eq!(exec_str("false or false"), Ok(Value::Bool(false)));
-        assert_eq!(exec_str("true or 10"), Ok(Value::Bool(true)));
+        assert_eq!(
+            exec_str("true or 10"),
+            Err(ValueBinaryOpError {
+                operator: BinOp::Or,
+                values: (Value::Bool(true), Value::Int64(10))
+            }
+            .into())
+        );
         assert_eq!(
             exec_str("10 or true"),
             Err(ValueBinaryOpError {
