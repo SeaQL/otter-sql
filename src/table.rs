@@ -21,7 +21,7 @@ pub struct Table {
 impl Table {
     pub fn new(name: BoundedString, mut columns: Vec<Column>) -> Self {
         // every table has a default unique key
-        columns.push(Column::new(
+        columns.insert(0, Column::new(
             TABLE_UNIQUE_KEY_NAME.into(),
             DataType::UnsignedInt(None),
             vec![ColumnOptionDef {
@@ -46,10 +46,11 @@ impl Table {
         )
     }
 
-    pub fn new_row(&mut self, mut data: Vec<Value>) {
+    pub fn new_row(&mut self, mut data: Vec<Value>) -> &mut Self {
         data.insert(0, Value::Int64(self.row_id as i64));
         self.data.push(Row { data });
         self.row_id += 1;
+        self
     }
 
     pub fn all_data(&self) -> Vec<Row> {
@@ -85,8 +86,9 @@ impl Table {
 
     /// Add a new column to the table.
     // TODO: does not add the column data to the rows.
-    pub fn add_column(&mut self, column: Column) {
+    pub fn add_column(&mut self, column: Column) -> &mut Self {
         self.columns.push(column);
+        self
     }
 
     pub fn rename(&mut self, new_name: BoundedString) {
