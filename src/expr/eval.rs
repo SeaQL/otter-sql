@@ -415,21 +415,67 @@ mod test {
                     }],
                     false,
                 ),
-                Column::new("col2".into(), DataType::String, vec![], false),
+                Column::new(
+                    "col2".into(),
+                    DataType::Int(None),
+                    vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::Unique { is_primary: false },
+                    }],
+                    false,
+                ),
+                Column::new("col3".into(), DataType::String, vec![], false),
             ],
         );
-        table.new_row(vec![Value::Int64(1), Value::String("brr".to_owned())]);
+        table.new_row(vec![
+            Value::Int64(4),
+            Value::Int64(10),
+            Value::String("brr".to_owned()),
+        ]);
 
         assert_eq!(
             table.all_data(),
             vec![Row {
-                data: vec![Value::Int64(1), Value::String("brr".to_owned())]
+                data: vec![
+                    Value::Int64(4),
+                    Value::Int64(10),
+                    Value::String("brr".to_owned())
+                ]
             }]
         );
 
         assert_eq!(
             exec_str_with_context("col1", &table, &table.all_data()[0]),
-            Ok(Value::Int64(1))
+            Ok(Value::Int64(4))
+        );
+
+        assert_eq!(
+            exec_str_with_context("col3", &table, &table.all_data()[0]),
+            Ok(Value::String("brr".to_owned()))
+        );
+
+        assert_eq!(
+            exec_str_with_context("col1 = 4", &table, &table.all_data()[0]),
+            Ok(Value::Bool(true))
+        );
+
+        assert_eq!(
+            exec_str_with_context("col1 + 1", &table, &table.all_data()[0]),
+            Ok(Value::Int64(5))
+        );
+
+        assert_eq!(
+            exec_str_with_context("col1 + col2", &table, &table.all_data()[0]),
+            Ok(Value::Int64(14))
+        );
+
+        assert_eq!(
+            exec_str_with_context(
+                "col1 + col2 = 10 or col1 * col2 = 40",
+                &table,
+                &table.all_data()[0]
+            ),
+            Ok(Value::Bool(true))
         );
     }
 
