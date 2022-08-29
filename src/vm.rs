@@ -10,6 +10,7 @@ use crate::expr::Expr;
 use crate::ic::{Instruction, IntermediateCode};
 use crate::identifier::TableRef;
 use crate::parser::parse;
+use crate::schema::Schema;
 use crate::table::{Row, Table};
 use crate::value::Value;
 use crate::{BoundedString, Database, Mrc};
@@ -129,43 +130,51 @@ impl VirtualMachine {
                     schema_name: None,
                     table_name,
                 } => {
-                    if let Some(table_index) = self
-                        .database
-                        .default_schema()
-                        .tables()
-                        .iter()
-                        .find(|table_index| self.tables[table_index].name() == table_name)
-                    {
-                        self.registers
-                            .insert(*index, Register::TableRef(*table_index));
-                    } else {
-                        return Err(RuntimeError::TableNotFound(*name));
-                    }
+                    let table_index =
+                        self.find_table(self.database.default_schema(), name, table_name)?;
+                    self.registers
+                        .insert(*index, Register::TableRef(table_index));
                 }
                 TableRef {
                     schema_name: Some(schema_name),
                     table_name,
                 } => {
-                    let schema =
-                        if let Some(schema_name) = self.database.schema_by_name(schema_name) {
-                            schema_name
-                        } else {
-                            return Err(RuntimeError::SchemaNotFound(*schema_name));
-                        };
-                    if let Some(table_index) = schema
-                        .tables()
-                        .iter()
-                        .find(|table_index| self.tables[table_index].name() == table_name)
-                    {
-                        self.registers
-                            .insert(*index, Register::TableRef(*table_index));
+                    let schema = if let Some(schema) = self.database.schema_by_name(schema_name) {
+                        schema
                     } else {
-                        return Err(RuntimeError::TableNotFound(*name));
-                    }
+                        return Err(RuntimeError::SchemaNotFound(*schema_name));
+                    };
+
+                    let table_index = self.find_table(schema, name, table_name)?;
+                    self.registers
+                        .insert(*index, Register::TableRef(table_index));
                 }
             },
+            Instruction::Empty { index } => {
+                let table_index = self.new_temp_table();
+                self.registers
+                    .insert(*index, Register::TableRef(table_index));
+            }
         }
         Ok(())
+    }
+
+    /// Find [`TableIndex`] given the schema and its name.
+    fn find_table(
+        &self,
+        schema: &Schema,
+        table: &TableRef,
+        table_name: &BoundedString,
+    ) -> Result<TableIndex, RuntimeError> {
+        if let Some(table_index) = schema
+            .tables()
+            .iter()
+            .find(|table_index| self.tables[table_index].name() == table_name)
+        {
+            Ok(*table_index)
+        } else {
+            Err(RuntimeError::TableNotFound(table.clone()))
+        }
     }
 }
 
