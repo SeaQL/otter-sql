@@ -1,11 +1,14 @@
 use std::collections::HashMap;
+use std::error::Error;
 use std::fmt::Display;
 
 use sqlparser::parser::ParserError;
 
 use crate::codegen::{codegen, CodegenError};
 use crate::column::Column;
+use crate::expr::Expr;
 use crate::ic::{Instruction, IntermediateCode};
+use crate::identifier::TableRef;
 use crate::parser::parse;
 use crate::table::{Row, Table};
 use crate::value::Value;
@@ -102,7 +105,7 @@ impl VirtualMachine {
 
     /// Executes the given intermediate code.
     // TODO: fix return type
-    fn execute_ic(&mut self, ic: &IntermediateCode) -> Result<(), ExecutionError> {
+    fn execute_ic(&mut self, ic: &IntermediateCode) -> Result<(), RuntimeError> {
         for instr in &ic.instrs {
             self.execute_instr(instr)?;
         }
@@ -111,9 +114,58 @@ impl VirtualMachine {
 
     /// Executes the given instruction.
     // TODO: fix return type
-    fn execute_instr(&mut self, _instr: &Instruction) -> Result<(), ExecutionError> {
+    fn execute_instr(&mut self, instr: &Instruction) -> Result<(), RuntimeError> {
         let _ = &self.database;
-        todo!()
+        match instr {
+            Instruction::Value { index, value } => {
+                self.registers
+                    .insert(*index, Register::Value(value.clone()));
+            }
+            Instruction::Expr { index, expr } => {
+                self.registers.insert(*index, Register::Expr(expr.clone()));
+            }
+            Instruction::Source { index, name } => match name {
+                TableRef {
+                    schema_name: None,
+                    table_name,
+                } => {
+                    if let Some(table_index) = self
+                        .database
+                        .default_schema()
+                        .tables()
+                        .iter()
+                        .find(|table_index| self.tables[table_index].name() == table_name)
+                    {
+                        self.registers
+                            .insert(*index, Register::TableRef(*table_index));
+                    } else {
+                        return Err(RuntimeError::TableNotFound(*name));
+                    }
+                }
+                TableRef {
+                    schema_name: Some(schema_name),
+                    table_name,
+                } => {
+                    let schema =
+                        if let Some(schema_name) = self.database.schema_by_name(schema_name) {
+                            schema_name
+                        } else {
+                            return Err(RuntimeError::SchemaNotFound(*schema_name));
+                        };
+                    if let Some(table_index) = schema
+                        .tables()
+                        .iter()
+                        .find(|table_index| self.tables[table_index].name() == table_name)
+                    {
+                        self.registers
+                            .insert(*index, Register::TableRef(*table_index));
+                    } else {
+                        return Err(RuntimeError::TableNotFound(*name));
+                    }
+                }
+            },
+        }
+        Ok(())
     }
 }
 
@@ -142,6 +194,10 @@ pub enum Register {
     InsertDef(InsertDef),
     /// A row to insert
     InsertRow(InsertRow),
+    /// A value
+    Value(Value),
+    /// An expression
+    Expr(Expr),
     // TODO: an error value?
 }
 
@@ -181,9 +237,11 @@ pub struct InsertRow {
     pub def: Mrc<InsertDef>,
 }
 
+#[derive(Debug)]
 pub enum ExecutionError {
     ParseError(ParserError),
     CodegenError(CodegenError),
+    RuntimeError(RuntimeError),
 }
 
 impl From<ParserError> for ExecutionError {
@@ -195,6 +253,39 @@ impl From<ParserError> for ExecutionError {
 impl From<CodegenError> for ExecutionError {
     fn from(err: CodegenError) -> Self {
         ExecutionError::CodegenError(err)
+    }
+}
+
+impl From<RuntimeError> for ExecutionError {
+    fn from(err: RuntimeError) -> Self {
+        ExecutionError::RuntimeError(err)
+    }
+}
+
+impl Display for ExecutionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ParseError(e) => write!(f, "{}", e),
+            Self::CodegenError(e) => write!(f, "{}", e),
+            Self::RuntimeError(e) => write!(f, "{}", e),
+        }
+    }
+}
+
+impl Error for ExecutionError {}
+
+#[derive(Debug)]
+pub enum RuntimeError {
+    TableNotFound(TableRef),
+    SchemaNotFound(BoundedString),
+}
+
+impl Display for RuntimeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TableNotFound(t) => write!(f, "Table not found: '{}'", t),
+            Self::SchemaNotFound(s) => write!(f, "Schema not found: '{}'", s),
+        }
     }
 }
 

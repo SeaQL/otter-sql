@@ -32,16 +32,6 @@ pub enum Instruction {
         name: TableRef,
     },
 
-    /// Load an *existing* table given by `name` from the schema `schema_name`.
-    ///
-    /// This will result in a [`Register::TableRef](`crate::vm::Register::TableRef) being stored at the
-    /// given register.
-    SourceFromSchema {
-        index: RegisterIndex,
-        schema_name: SchemaRef,
-        name: BoundedString,
-    },
-
     /// Create a new empty [`Register::TableRef](`crate::vm::Register::TableRef).
     Empty { index: RegisterIndex },
 
