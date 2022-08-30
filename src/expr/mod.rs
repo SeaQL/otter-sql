@@ -10,6 +10,8 @@ use crate::{
     BoundedString,
 };
 
+pub mod eval;
+
 /// An expression
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
@@ -29,6 +31,27 @@ pub enum Expr {
         name: BoundedString,
         args: Vec<Expr>,
     },
+}
+
+impl Display for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Value(v) => write!(f, "{}", v),
+            Self::ColumnRef(c) => write!(f, "column '{}'", c),
+            Self::Wildcard => write!(f, "*"),
+            Self::Binary { left, op, right } => write!(f, "{} {} {}", left, op, right),
+            Self::Unary { op, operand } => write!(f, "{}{}", op, operand),
+            Self::Function { name, args } => write!(
+                f,
+                "{}({})",
+                name,
+                args.iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+        }
+    }
 }
 
 /// A binary operator
@@ -51,6 +74,32 @@ pub enum BinOp {
     Or,
 }
 
+impl Display for BinOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                BinOp::Plus => "+",
+                BinOp::Minus => "-",
+                BinOp::Multiply => "*",
+                BinOp::Divide => "/",
+                BinOp::Modulo => "%",
+                BinOp::Equal => "=",
+                BinOp::NotEqual => "!=",
+                BinOp::LessThan => "<",
+                BinOp::LessThanOrEqual => "<=",
+                BinOp::GreaterThan => ">",
+                BinOp::GreaterThanOrEqual => ">=",
+                BinOp::Like => "LIKE",
+                BinOp::ILike => "ILIKE",
+                BinOp::And => "AND",
+                BinOp::Or => "OR",
+            }
+        )
+    }
+}
+
 /// A unary operator
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum UnOp {
@@ -61,6 +110,24 @@ pub enum UnOp {
     IsTrue,
     IsNull,
     IsNotNull,
+}
+
+impl Display for UnOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                UnOp::Plus => "+",
+                UnOp::Minus => "-",
+                UnOp::Not => "NOT",
+                UnOp::IsFalse => "IS FALSE",
+                UnOp::IsTrue => "IS TRUE",
+                UnOp::IsNull => "IS NULL",
+                UnOp::IsNotNull => "IS NOT NULL",
+            }
+        )
+    }
 }
 
 impl TryFrom<ast::Expr> for Expr {

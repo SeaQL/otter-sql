@@ -1,11 +1,16 @@
-use std::fmt::Display;
+use std::{
+    fmt::Display,
+    ops::{Add, Div, Mul, Neg, Not, Rem, Sub},
+};
 
 use sqlparser::ast;
+
+use crate::expr::{BinOp, UnOp};
 
 /// A value contained within a table's cell.
 ///
 /// One or more column types may be mapped to a single variant of [`Value`].
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum Value {
     Null,
 
@@ -13,20 +18,7 @@ pub enum Value {
 
     // integer types
     // reference: https://dev.mysql.com/doc/refman/8.0/en/integer-types.html
-    UInt8(u8),
-
-    Int8(i8),
-
-    UInt16(u16),
-
-    Int16(i16),
-
-    UInt32(u32),
-
-    Int32(i32),
-
-    UInt64(u64),
-
+    // TODO: other integer types. Currently, all integers are casted to Int64.
     Int64(i64),
 
     // TODO: exact value fixed point types - Decimal and Numeric
@@ -34,8 +26,7 @@ pub enum Value {
     // floating point types
     // reference: https://dev.mysql.com/doc/refman/8.0/en/floating-point-types.html
     // note: specifying exact precision and digits is not supported yet
-    Float32(f32),
-
+    // TODO: Float32
     Float64(f64),
 
     // TODO: date and timestamp
@@ -45,6 +36,79 @@ pub enum Value {
     String(String),
 
     Binary(Vec<u8>),
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Null => write!(f, "NULL"),
+            Self::Bool(v) => write!(f, "{}", v),
+            Self::Int64(v) => write!(f, "{}", v),
+            Self::Float64(v) => write!(f, "{}", v),
+            Self::String(v) => write!(f, "{}", v),
+            Self::Binary(v) => write!(f, "{:?}", v),
+        }
+    }
+}
+
+impl Value {
+    pub fn is_true(self) -> Result<Value, ValueUnaryOpError> {
+        match self {
+            Value::Bool(lhs) => Ok(Value::Bool(lhs)),
+            _ => Err(ValueUnaryOpError {
+                operator: UnOp::Not,
+                value: self,
+            }),
+        }
+    }
+
+    pub fn is_false(self) -> Result<Value, ValueUnaryOpError> {
+        match self {
+            Value::Bool(lhs) => Ok(Value::Bool(!lhs)),
+            _ => Err(ValueUnaryOpError {
+                operator: UnOp::Not,
+                value: self,
+            }),
+        }
+    }
+
+    pub fn is_null(self) -> Result<Value, ValueUnaryOpError> {
+        match self {
+            Value::Null => Ok(Value::Bool(true)),
+            _ => Ok(Value::Bool(false)),
+        }
+    }
+
+    pub fn is_not_null(self) -> Result<Value, ValueUnaryOpError> {
+        match self {
+            Value::Null => Ok(Value::Bool(false)),
+            _ => Ok(Value::Bool(true)),
+        }
+    }
+
+    pub fn like(self, rhs: Value) -> Result<Value, ValueBinaryOpError> {
+        match (&self, &rhs) {
+            // TODO: implement proper pattern matching
+            (Value::String(lhs), Value::String(rhs)) => Ok(Value::Bool(lhs.contains(rhs))),
+            _ => Err(ValueBinaryOpError {
+                operator: BinOp::Like,
+                values: (self, rhs),
+            }),
+        }
+    }
+
+    pub fn ilike(self, rhs: Value) -> Result<Value, ValueBinaryOpError> {
+        match (&self, &rhs) {
+            // TODO: implement proper pattern matching
+            (Value::String(lhs), Value::String(rhs)) => Ok(Value::Bool(
+                lhs.to_lowercase().contains(&rhs.to_lowercase()),
+            )),
+            _ => Err(ValueBinaryOpError {
+                operator: BinOp::Like,
+                values: (self, rhs),
+            }),
+        }
+    }
 }
 
 impl TryFrom<ast::Value> for Value {
@@ -75,6 +139,214 @@ impl TryFrom<ast::Value> for Value {
                 value: val,
             }),
         }
+    }
+}
+
+impl Add for Value {
+    type Output = Result<Value, ValueBinaryOpError>;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        match self {
+            Value::Null | Value::Bool(_) | Value::String(_) | Value::Binary(_) => {
+                Err(ValueBinaryOpError {
+                    operator: BinOp::Plus,
+                    values: (self, rhs),
+                })
+            }
+            Value::Int64(lhs) => match rhs {
+                Value::Int64(rhs) => Ok(Value::Int64(lhs + rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Plus,
+                    values: (self, rhs),
+                }),
+            },
+            Value::Float64(lhs) => match rhs {
+                Value::Float64(rhs) => Ok(Value::Float64(lhs + rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Plus,
+                    values: (self, rhs),
+                }),
+            },
+        }
+    }
+}
+
+impl Sub for Value {
+    type Output = Result<Value, ValueBinaryOpError>;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        match self {
+            Value::Null | Value::Bool(_) | Value::String(_) | Value::Binary(_) => {
+                Err(ValueBinaryOpError {
+                    operator: BinOp::Minus,
+                    values: (self, rhs),
+                })
+            }
+            Value::Int64(lhs) => match rhs {
+                Value::Int64(rhs) => Ok(Value::Int64(lhs - rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Minus,
+                    values: (self, rhs),
+                }),
+            },
+            Value::Float64(lhs) => match rhs {
+                Value::Float64(rhs) => Ok(Value::Float64(lhs - rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Minus,
+                    values: (self, rhs),
+                }),
+            },
+        }
+    }
+}
+
+impl Mul for Value {
+    type Output = Result<Value, ValueBinaryOpError>;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        match self {
+            Value::Null | Value::Bool(_) | Value::String(_) | Value::Binary(_) => {
+                Err(ValueBinaryOpError {
+                    operator: BinOp::Multiply,
+                    values: (self, rhs),
+                })
+            }
+            Value::Int64(lhs) => match rhs {
+                Value::Int64(rhs) => Ok(Value::Int64(lhs * rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Multiply,
+                    values: (self, rhs),
+                }),
+            },
+            Value::Float64(lhs) => match rhs {
+                Value::Float64(rhs) => Ok(Value::Float64(lhs * rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Multiply,
+                    values: (self, rhs),
+                }),
+            },
+        }
+    }
+}
+
+impl Div for Value {
+    type Output = Result<Value, ValueBinaryOpError>;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        match self {
+            Value::Null | Value::Bool(_) | Value::String(_) | Value::Binary(_) => {
+                Err(ValueBinaryOpError {
+                    operator: BinOp::Divide,
+                    values: (self, rhs),
+                })
+            }
+            Value::Int64(lhs) => match rhs {
+                Value::Int64(rhs) => Ok(Value::Int64(lhs / rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Divide,
+                    values: (self, rhs),
+                }),
+            },
+            Value::Float64(lhs) => match rhs {
+                Value::Float64(rhs) => Ok(Value::Float64(lhs / rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Divide,
+                    values: (self, rhs),
+                }),
+            },
+        }
+    }
+}
+
+impl Rem for Value {
+    type Output = Result<Value, ValueBinaryOpError>;
+
+    fn rem(self, rhs: Self) -> Self::Output {
+        match self {
+            Value::Null | Value::Bool(_) | Value::String(_) | Value::Binary(_) => {
+                Err(ValueBinaryOpError {
+                    operator: BinOp::Modulo,
+                    values: (self, rhs),
+                })
+            }
+            Value::Int64(lhs) => match rhs {
+                Value::Int64(rhs) => Ok(Value::Int64(lhs % rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Modulo,
+                    values: (self, rhs),
+                }),
+            },
+            Value::Float64(lhs) => match rhs {
+                Value::Float64(rhs) => Ok(Value::Float64(lhs % rhs)),
+                _ => Err(ValueBinaryOpError {
+                    operator: BinOp::Modulo,
+                    values: (self, rhs),
+                }),
+            },
+        }
+    }
+}
+
+impl Neg for Value {
+    type Output = Result<Value, ValueUnaryOpError>;
+
+    fn neg(self) -> Self::Output {
+        match self {
+            Value::Null | Value::Bool(_) | Value::String(_) | Value::Binary(_) => {
+                Err(ValueUnaryOpError {
+                    operator: UnOp::Minus,
+                    value: self,
+                })
+            }
+            Value::Int64(lhs) => Ok(Value::Int64(-lhs)),
+            Value::Float64(lhs) => Ok(Value::Float64(-lhs)),
+        }
+    }
+}
+
+impl Not for Value {
+    type Output = Result<Value, ValueUnaryOpError>;
+
+    fn not(self) -> Self::Output {
+        match self {
+            Value::Bool(lhs) => Ok(Value::Bool(!lhs)),
+            _ => Err(ValueUnaryOpError {
+                operator: UnOp::Not,
+                value: self,
+            }),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ValueBinaryOpError {
+    pub operator: BinOp,
+    pub values: (Value, Value),
+}
+
+impl Display for ValueBinaryOpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "ValueBinaryOpError: unsupported operation '{}' between '{:?}' and '{:?}'",
+            self.operator, self.values.0, self.values.1
+        )
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ValueUnaryOpError {
+    pub operator: UnOp,
+    pub value: Value,
+}
+
+impl Display for ValueUnaryOpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "ValueUnaryOpError: unsupported operation '{}' for '{:?}'",
+            self.operator, self.value
+        )
     }
 }
 

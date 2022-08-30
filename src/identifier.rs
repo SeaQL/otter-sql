@@ -66,6 +66,34 @@ pub struct ColumnRef {
     pub col_name: BoundedString,
 }
 
+impl Display for ColumnRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self {
+                schema_name: None,
+                table_name: None,
+                col_name,
+            } => write!(f, "{}", col_name),
+            Self {
+                schema_name: None,
+                table_name: Some(table_name),
+                col_name,
+            } => write!(f, "{}.{}", table_name, col_name),
+            Self {
+                schema_name: Some(schema_name),
+                table_name: Some(table_name),
+                col_name,
+            } => write!(f, "{}.{}.{}", schema_name, table_name, col_name),
+            // the below case does not occur
+            Self {
+                schema_name: Some(schema_name),
+                table_name: None,
+                col_name,
+            } => write!(f, "{}.{}", schema_name, col_name),
+        }
+    }
+}
+
 impl TryFrom<Vec<Ident>> for ColumnRef {
     type Error = IdentifierError;
 
