@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Display;
 
+use sqlparser::ast::DataType;
 use sqlparser::parser::ParserError;
 
 use crate::codegen::{codegen, CodegenError};
@@ -94,28 +95,27 @@ impl VirtualMachine {
     }
 
     /// Executes the given SQL.
-    // TODO: fix return type
-    pub fn execute(&mut self, code: &str) -> Result<(), ExecutionError> {
+    pub fn execute(&mut self, code: &str) -> Result<Option<Table>, ExecutionError> {
         let ast = parse(code)?;
+        let mut ret = None;
         for stmt in ast {
             let ic = codegen(&stmt)?;
-            self.execute_ic(&ic)?;
+            ret = self.execute_ic(&ic)?;
         }
-        Ok(())
+        Ok(ret)
     }
 
     /// Executes the given intermediate code.
-    // TODO: fix return type
-    fn execute_ic(&mut self, ic: &IntermediateCode) -> Result<(), RuntimeError> {
+    fn execute_ic(&mut self, ic: &IntermediateCode) -> Result<Option<Table>, RuntimeError> {
+        let mut ret = None;
         for instr in &ic.instrs {
-            self.execute_instr(instr)?;
+            ret = self.execute_instr(instr)?;
         }
-        Ok(())
+        Ok(ret)
     }
 
     /// Executes the given instruction.
-    // TODO: fix return type
-    fn execute_instr(&mut self, instr: &Instruction) -> Result<(), RuntimeError> {
+    fn execute_instr(&mut self, instr: &Instruction) -> Result<Option<Table>, RuntimeError> {
         let _ = &self.database;
         match instr {
             Instruction::Value { index, value } => {
@@ -155,8 +155,24 @@ impl VirtualMachine {
                 self.registers
                     .insert(*index, Register::TableRef(table_index));
             }
+            Instruction::Return { index } => match self.registers.remove(index) {
+                None => return Err(RuntimeError::EmptyRegister(*index)),
+                Some(Register::TableRef(t)) => return Ok(Some(self.tables[&t].clone())),
+                Some(Register::Value(v)) => {
+                    let mut table = Table::new_temp(self.last_table_index.next_index().0);
+                    table.add_column(Column::new(
+                        "?column?".into(),
+                        v.data_type(),
+                        vec![],
+                        false,
+                    ));
+                    table.new_row(vec![v]);
+                    return Ok(Some(table));
+                }
+                Some(register) => return Err(RuntimeError::CannotReturn(register.clone())),
+            },
         }
-        Ok(())
+        Ok(None)
     }
 
     /// Find [`TableIndex`] given the schema and its name.
@@ -184,6 +200,7 @@ impl Default for VirtualMachine {
     }
 }
 
+#[derive(Debug, Clone)]
 /// A register in the executor VM.
 pub enum Register {
     /// A reference to a table.
@@ -210,12 +227,14 @@ pub enum Register {
     // TODO: an error value?
 }
 
+#[derive(Debug, Clone)]
 /// An abstract definition of a create table statement.
 pub struct TableDef {
     pub name: BoundedString,
     pub columns: Vec<Column>,
 }
 
+#[derive(Debug, Clone)]
 /// An abstract definition of an insert statement.
 pub struct InsertDef {
     /// The view to insert into
@@ -238,6 +257,7 @@ impl InsertDef {
     }
 }
 
+#[derive(Debug, Clone)]
 /// A row of values to insert.
 pub struct InsertRow {
     /// The values
@@ -287,6 +307,8 @@ impl Error for ExecutionError {}
 pub enum RuntimeError {
     TableNotFound(TableRef),
     SchemaNotFound(BoundedString),
+    EmptyRegister(RegisterIndex),
+    CannotReturn(Register),
 }
 
 impl Display for RuntimeError {
@@ -294,6 +316,16 @@ impl Display for RuntimeError {
         match self {
             Self::TableNotFound(t) => write!(f, "Table not found: '{}'", t),
             Self::SchemaNotFound(s) => write!(f, "Schema not found: '{}'", s),
+            Self::EmptyRegister(r) => write!(
+                f,
+                "Register is not initialized: '{}' (critical error. Please file an issue.)",
+                r
+            ),
+            Self::CannotReturn(r) => write!(
+                f,
+                "Register value cannot be returned: '{:?}' (critical error. Please file an issue)",
+                r
+            ),
         }
     }
 }

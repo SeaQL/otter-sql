@@ -6,6 +6,7 @@ pub const TABLE_UNIQUE_KEY_NAME: &str = "__otter_unique_key";
 
 pub const TABLE_TEMPORARY_NAME: &str = "__otter_temporary_table";
 
+#[derive(Debug, Clone)]
 /// A table in a database.
 ///
 /// Contains both the metadata and the actual data.
