@@ -3,7 +3,7 @@ use std::{
     ops::{Add, Div, Mul, Neg, Not, Rem, Sub},
 };
 
-use sqlparser::ast;
+use sqlparser::ast::{self, DataType};
 
 use crate::expr::{BinOp, UnOp};
 
@@ -107,6 +107,18 @@ impl Value {
                 operator: BinOp::Like,
                 values: (self, rhs),
             }),
+        }
+    }
+
+    /// Type of data this value is
+    pub fn data_type(&self) -> DataType {
+        match self {
+            Self::Null => DataType::Int(None),
+            Self::Bool(_) => DataType::Boolean,
+            Self::Int64(_) => DataType::Int(None),
+            Self::Float64(_) => DataType::Float(None),
+            Self::String(_) => DataType::String,
+            Self::Binary(_) => DataType::Bytea,
         }
     }
 }
