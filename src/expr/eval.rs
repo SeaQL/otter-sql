@@ -3,14 +3,12 @@
 use std::{error::Error, fmt::Display};
 
 use crate::{
-    expr::{BinOp, Expr},
+    expr::{BinOp, Expr, UnOp},
     identifier::BoundedString,
     table::{Row, Table},
     value::{Value, ValueBinaryOpError, ValueUnaryOpError},
     VirtualMachine,
 };
-
-use super::UnOp;
 
 impl Expr {
     pub fn execute(
