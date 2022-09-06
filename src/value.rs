@@ -56,7 +56,7 @@ impl Value {
         match self {
             Value::Bool(lhs) => Ok(Value::Bool(lhs)),
             _ => Err(ValueUnaryOpError {
-                operator: UnOp::Not,
+                operator: UnOp::IsTrue,
                 value: self,
             }),
         }
@@ -66,7 +66,7 @@ impl Value {
         match self {
             Value::Bool(lhs) => Ok(Value::Bool(!lhs)),
             _ => Err(ValueUnaryOpError {
-                operator: UnOp::Not,
+                operator: UnOp::IsFalse,
                 value: self,
             }),
         }
