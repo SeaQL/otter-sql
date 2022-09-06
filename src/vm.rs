@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Display;
 
-use sqlparser::ast::DataType;
 use sqlparser::parser::ParserError;
 
 use crate::codegen::{codegen, CodegenError};
 use crate::column::Column;
+use crate::expr::eval::ExprExecError;
 use crate::expr::Expr;
 use crate::ic::{Instruction, IntermediateCode};
 use crate::identifier::TableRef;
@@ -166,6 +166,35 @@ impl VirtualMachine {
                 }
                 Some(register) => return Err(RuntimeError::CannotReturn(register.clone())),
             },
+            Instruction::Filter { index, expr } => match self.registers.get(index) {
+                None => return Err(RuntimeError::EmptyRegister(*index)),
+                Some(Register::TableRef(table_index)) => {
+                    // TODO: should be safe to unwrap, but make it an error anyway?
+                    let table = self.tables.get(table_index).unwrap();
+                    let filtered_data = table
+                        .raw_data
+                        .iter()
+                        .filter_map(|row| match Expr::execute(expr, &self, table, row) {
+                            Ok(val) => match val {
+                                Value::Bool(b) => {
+                                    if b {
+                                        Some(Ok(row.clone()))
+                                    } else {
+                                        None
+                                    }
+                                }
+                                _ => Some(Err(RuntimeError::FilterWithNonBoolean(
+                                    expr.clone(),
+                                    val.clone(),
+                                ))),
+                            },
+                            Err(e) => Some(Err(e.into())),
+                        })
+                        .collect::<Result<_, _>>()?;
+                    self.tables.get_mut(table_index).unwrap().raw_data = filtered_data;
+                }
+                Some(reg) => return Err(RuntimeError::RegisterNotATable("filter", reg.clone())),
+            },
         }
         Ok(None)
     }
@@ -303,7 +332,16 @@ pub enum RuntimeError {
     TableNotFound(TableRef),
     SchemaNotFound(BoundedString),
     EmptyRegister(RegisterIndex),
+    RegisterNotATable(&'static str, Register),
     CannotReturn(Register),
+    FilterWithNonBoolean(Expr, Value),
+    ExprExecError(ExprExecError),
+}
+
+impl From<ExprExecError> for RuntimeError {
+    fn from(e: ExprExecError) -> Self {
+        Self::ExprExecError(e)
+    }
 }
 
 impl Display for RuntimeError {
@@ -316,11 +354,22 @@ impl Display for RuntimeError {
                 "Register is not initialized: '{}' (critical error. Please file an issue.)",
                 r
             ),
+            Self::RegisterNotATable(operation, reg) => write!(
+                f,
+                "Register is not a table. Cannot perform '{}' on '{:?}'",
+                operation, reg
+            ),
             Self::CannotReturn(r) => write!(
                 f,
                 "Register value cannot be returned: '{:?}' (critical error. Please file an issue)",
                 r
             ),
+            Self::FilterWithNonBoolean(e, v) => write!(
+                f,
+                "WHERE clause used with a non-boolean value. Expression: '{}' evaluated to value: '{}'",
+                e, v
+            ),
+            Self::ExprExecError(e) => write!(f, "{}", e),
         }
     }
 }
