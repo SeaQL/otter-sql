@@ -195,6 +195,27 @@ impl VirtualMachine {
                 }
                 Some(reg) => return Err(RuntimeError::RegisterNotATable("filter", reg.clone())),
             },
+            Instruction::Project { input, output, expr, alias } => todo!(),
+            Instruction::GroupBy { index, expr } => todo!(),
+            Instruction::Order { index, expr, ascending } => todo!(),
+            Instruction::Limit { index, limit } => todo!(),
+            Instruction::NewSchema { schema_name, exists_ok } => todo!(),
+            Instruction::ColumnDef { index, name, data_type } => todo!(),
+            Instruction::AddColumnOption { index, option } => todo!(),
+            Instruction::AddColumn { table_reg_index, col_index } => todo!(),
+            Instruction::NewTable { index, name, exists_ok } => todo!(),
+            Instruction::DropTable { index } => todo!(),
+            Instruction::RemoveColumn { index, col_name } => todo!(),
+            Instruction::RenameColumn { index, old_name, new_name } => todo!(),
+            Instruction::InsertDef { table_reg_index, index } => todo!(),
+            Instruction::ColumnInsertDef { insert_index, col_name } => todo!(),
+            Instruction::RowDef { insert_index, row_index } => todo!(),
+            Instruction::AddValue { row_index, expr } => todo!(),
+            Instruction::Insert { index } => todo!(),
+            Instruction::Update { index, col, expr } => todo!(),
+            Instruction::Union { input1, input2, output } => todo!(),
+            Instruction::CrossJoin { input1, input2, output } => todo!(),
+            Instruction::NaturalJoin { input1, input2, output } => todo!(),
         }
         Ok(None)
     }
