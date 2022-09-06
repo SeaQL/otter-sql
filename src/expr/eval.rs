@@ -374,7 +374,7 @@ mod test {
         assert_eq!(
             exec_str_no_context("1 is true"),
             Err(ValueUnaryOpError {
-                operator: UnOp::Not,
+                operator: UnOp::IsTrue,
                 value: Value::Int64(1)
             }
             .into())
