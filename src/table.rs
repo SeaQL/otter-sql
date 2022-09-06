@@ -15,7 +15,7 @@ pub struct Table {
     columns: Vec<Column>,
     /// The table's data.
     // TODO: provide methods that verify the data while adding
-    data: Vec<Row>,
+    pub(crate) raw_data: Vec<Row>,
     row_id: u64,
 }
 
@@ -35,7 +35,7 @@ impl Table {
         Self {
             name,
             columns,
-            data: Vec::new(),
+            raw_data: Vec::new(),
             row_id: 0,
         }
     }
@@ -49,13 +49,13 @@ impl Table {
 
     pub fn new_row(&mut self, mut data: Vec<Value>) -> &mut Self {
         data.insert(0, Value::Int64(self.row_id as i64));
-        self.data.push(Row { data });
+        self.raw_data.push(Row { data });
         self.row_id += 1;
         self
     }
 
     pub fn all_data(&self) -> Vec<Row> {
-        self.data
+        self.raw_data
             .iter()
             .map(|row| Row {
                 data: row
