@@ -160,12 +160,7 @@ impl VirtualMachine {
                 Some(Register::TableRef(t)) => return Ok(Some(self.tables[&t].clone())),
                 Some(Register::Value(v)) => {
                     let mut table = Table::new_temp(self.last_table_index.next_index().0);
-                    table.add_column(Column::new(
-                        "?column?".into(),
-                        v.data_type(),
-                        vec![],
-                        false,
-                    ));
+                    table.add_column(Column::new("?column?".into(), v.data_type(), vec![], false));
                     table.new_row(vec![v]);
                     return Ok(Some(table));
                 }
