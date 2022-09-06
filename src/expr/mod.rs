@@ -39,7 +39,7 @@ impl Display for Expr {
             Self::Value(v) => write!(f, "{}", v),
             Self::ColumnRef(c) => write!(f, "column '{}'", c),
             Self::Wildcard => write!(f, "*"),
-            Self::Binary { left, op, right } => write!(f, "{} {} {}", left, op, right),
+            Self::Binary { left, op, right } => write!(f, "({} {} {})", left, op, right),
             Self::Unary { op, operand } => write!(f, "{}{}", op, operand),
             Self::Function { name, args } => write!(
                 f,
