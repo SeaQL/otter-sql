@@ -7,16 +7,10 @@ use crate::{
     identifier::BoundedString,
     table::{Row, Table},
     value::{Value, ValueBinaryOpError, ValueUnaryOpError},
-    VirtualMachine,
 };
 
 impl Expr {
-    pub fn execute(
-        expr: &Expr,
-        vm: &VirtualMachine,
-        table: &Table,
-        row: &Row,
-    ) -> Result<Value, ExprExecError> {
+    pub fn execute(expr: &Expr, table: &Table, row: &Row) -> Result<Value, ExprExecError> {
         match expr {
             Expr::Value(v) => Ok(v.to_owned()),
             Expr::Binary {
@@ -24,8 +18,8 @@ impl Expr {
                 op: BinOp::And,
                 right,
             } => {
-                let left = Expr::execute(left, vm, table, row)?;
-                let right = Expr::execute(right, vm, table, row)?;
+                let left = Expr::execute(left, table, row)?;
+                let right = Expr::execute(right, table, row)?;
 
                 match (&left, &right) {
                     (Value::Bool(left), Value::Bool(right)) => Ok(Value::Bool(*left && *right)),
@@ -40,8 +34,8 @@ impl Expr {
                 op: BinOp::Or,
                 right,
             } => {
-                let left = Expr::execute(left, vm, table, row)?;
-                let right = Expr::execute(right, vm, table, row)?;
+                let left = Expr::execute(left, table, row)?;
+                let right = Expr::execute(right, table, row)?;
 
                 match (&left, &right) {
                     (Value::Bool(left), Value::Bool(right)) => Ok(Value::Bool(*left || *right)),
@@ -52,8 +46,8 @@ impl Expr {
                 }
             }
             Expr::Binary { left, op, right } => {
-                let left = Expr::execute(left, vm, table, row)?;
-                let right = Expr::execute(right, vm, table, row)?;
+                let left = Expr::execute(left, table, row)?;
+                let right = Expr::execute(right, table, row)?;
                 Ok(match op {
                     BinOp::Plus => left + right,
                     BinOp::Minus => left - right,
@@ -74,7 +68,7 @@ impl Expr {
                 }?)
             }
             Expr::Unary { op, operand } => {
-                let operand = Expr::execute(operand, vm, table, row)?;
+                let operand = Expr::execute(operand, table, row)?;
                 Ok(match op {
                     UnOp::Plus => Ok(operand),
                     UnOp::Minus => -operand,
@@ -172,8 +166,7 @@ mod test {
         column::Column,
         expr::{BinOp, Expr, UnOp},
         table::{Row, Table},
-        value::{Value, ValueBinaryOpError, ValueUnaryOpError},
-        VirtualMachine,
+        value::{Value, ValueBinaryOpError, ValueUnaryOpError}
     };
 
     use super::ExprExecError;
@@ -187,10 +180,9 @@ mod test {
     }
 
     fn exec_expr_no_context(expr: Expr) -> Result<Value, ExprExecError> {
-        let vm = VirtualMachine::new("test".into());
         let mut table = Table::new_temp(0);
         table.new_row(vec![]);
-        Expr::execute(&expr, &vm, &table, &table.all_data()[0])
+        Expr::execute(&expr, &table, &table.all_data()[0])
     }
 
     fn exec_str_no_context(s: &str) -> Result<Value, ExprExecError> {
@@ -200,8 +192,7 @@ mod test {
 
     fn exec_str_with_context(s: &str, table: &Table, row: &Row) -> Result<Value, ExprExecError> {
         let expr = str_to_expr(s);
-        let vm = VirtualMachine::new("test".into());
-        Expr::execute(&expr, &vm, table, row)
+        Expr::execute(&expr, table, row)
     }
 
     #[test]

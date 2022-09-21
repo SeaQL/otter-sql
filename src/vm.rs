@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::error::Error;
 use std::fmt::Display;
 
@@ -9,7 +9,7 @@ use crate::column::Column;
 use crate::expr::eval::ExprExecError;
 use crate::expr::Expr;
 use crate::ic::{Instruction, IntermediateCode};
-use crate::identifier::TableRef;
+use crate::identifier::{ColumnRef, TableRef};
 use crate::parser::parse;
 use crate::schema::Schema;
 use crate::table::{Row, Table};
@@ -174,7 +174,7 @@ impl VirtualMachine {
                     let filtered_data = table
                         .raw_data
                         .iter()
-                        .filter_map(|row| match Expr::execute(expr, &self, table, row) {
+                        .filter_map(|row| match Expr::execute(expr, table, row) {
                             Ok(val) => match val {
                                 Value::Bool(b) => {
                                     if b {
@@ -195,27 +195,128 @@ impl VirtualMachine {
                 }
                 Some(reg) => return Err(RuntimeError::RegisterNotATable("filter", reg.clone())),
             },
-            Instruction::Project { input, output, expr, alias } => todo!(),
+            Instruction::Project {
+                input,
+                output,
+                expr,
+                alias,
+            } => match (self.registers.get(input), self.registers.get(output)) {
+                (None, _) => return Err(RuntimeError::EmptyRegister(*input)),
+                (_, None) => return Err(RuntimeError::EmptyRegister(*output)),
+                (
+                    Some(Register::TableRef(inp_table_index)),
+                    Some(Register::TableRef(out_table_index)),
+                ) => {
+                    let [inp_table, out_table] = self
+                        .tables
+                        .get_many_mut([inp_table_index, out_table_index])
+                        .unwrap();
+
+                    if !out_table.is_empty()
+                        && (inp_table.raw_data.len() != out_table.raw_data.len())
+                    {
+                        return Err(RuntimeError::ProjectTableSizeMismatch {
+                            inp_table_name: inp_table.name().to_owned(),
+                            inp_table_len: inp_table.raw_data.len(),
+                            out_table_name: out_table.name().to_owned(),
+                            out_table_len: out_table.raw_data.len(),
+                        });
+                    }
+
+                    if let Expr::Wildcard = expr {
+                        // TODO: this could be optimized.
+                        for col in inp_table.columns() {
+                            out_table.add_column(col.clone());
+                            out_table.add_column_data(
+                                col.name(),
+                                inp_table.get_column_data(col.name())?,
+                            )?;
+                        }
+                    } else {
+                        for (inp_row, out_row) in
+                            inp_table.raw_data.iter().zip(out_table.raw_data.iter_mut())
+                        {
+                            let val = Expr::execute(expr, inp_table, inp_row)?;
+                            out_row.data.push(val);
+                        }
+
+                        // TOOD: get type from the expression and add column based on it.
+                        // let new_col = Column {name: "PLACEHOLDER".into(), data_type:}
+                    }
+                }
+                (Some(reg), Some(Register::TableRef(_))) => {
+                    return Err(RuntimeError::RegisterNotATable("project", reg.clone()))
+                }
+                (Some(Register::TableRef(_)), Some(reg)) => {
+                    return Err(RuntimeError::RegisterNotATable("project", reg.clone()))
+                }
+                (Some(reg), Some(_)) => {
+                    return Err(RuntimeError::RegisterNotATable("project", reg.clone()))
+                }
+            },
             Instruction::GroupBy { index, expr } => todo!(),
-            Instruction::Order { index, expr, ascending } => todo!(),
+            Instruction::Order {
+                index,
+                expr,
+                ascending,
+            } => todo!(),
             Instruction::Limit { index, limit } => todo!(),
-            Instruction::NewSchema { schema_name, exists_ok } => todo!(),
-            Instruction::ColumnDef { index, name, data_type } => todo!(),
+            Instruction::NewSchema {
+                schema_name,
+                exists_ok,
+            } => todo!(),
+            Instruction::ColumnDef {
+                index,
+                name,
+                data_type,
+            } => todo!(),
             Instruction::AddColumnOption { index, option } => todo!(),
-            Instruction::AddColumn { table_reg_index, col_index } => todo!(),
-            Instruction::NewTable { index, name, exists_ok } => todo!(),
+            Instruction::AddColumn {
+                table_reg_index,
+                col_index,
+            } => todo!(),
+            Instruction::NewTable {
+                index,
+                name,
+                exists_ok,
+            } => todo!(),
             Instruction::DropTable { index } => todo!(),
             Instruction::RemoveColumn { index, col_name } => todo!(),
-            Instruction::RenameColumn { index, old_name, new_name } => todo!(),
-            Instruction::InsertDef { table_reg_index, index } => todo!(),
-            Instruction::ColumnInsertDef { insert_index, col_name } => todo!(),
-            Instruction::RowDef { insert_index, row_index } => todo!(),
+            Instruction::RenameColumn {
+                index,
+                old_name,
+                new_name,
+            } => todo!(),
+            Instruction::InsertDef {
+                table_reg_index,
+                index,
+            } => todo!(),
+            Instruction::ColumnInsertDef {
+                insert_index,
+                col_name,
+            } => todo!(),
+            Instruction::RowDef {
+                insert_index,
+                row_index,
+            } => todo!(),
             Instruction::AddValue { row_index, expr } => todo!(),
             Instruction::Insert { index } => todo!(),
             Instruction::Update { index, col, expr } => todo!(),
-            Instruction::Union { input1, input2, output } => todo!(),
-            Instruction::CrossJoin { input1, input2, output } => todo!(),
-            Instruction::NaturalJoin { input1, input2, output } => todo!(),
+            Instruction::Union {
+                input1,
+                input2,
+                output,
+            } => todo!(),
+            Instruction::CrossJoin {
+                input1,
+                input2,
+                output,
+            } => todo!(),
+            Instruction::NaturalJoin {
+                input1,
+                input2,
+                output,
+            } => todo!(),
         }
         Ok(None)
     }
@@ -350,12 +451,26 @@ impl Error for ExecutionError {}
 
 #[derive(Debug)]
 pub enum RuntimeError {
+    ColumnNotFound(ColumnRef),
     TableNotFound(TableRef),
     SchemaNotFound(BoundedString),
     EmptyRegister(RegisterIndex),
     RegisterNotATable(&'static str, Register),
     CannotReturn(Register),
     FilterWithNonBoolean(Expr, Value),
+    ProjectOnNonEmptyTable(BoundedString),
+    ProjectTableSizeMismatch {
+        inp_table_name: BoundedString,
+        inp_table_len: usize,
+        out_table_name: BoundedString,
+        out_table_len: usize,
+    },
+    TableNewColumnSizeMismatch {
+        table_name: BoundedString,
+        table_len: usize,
+        col_name: BoundedString,
+        col_len: usize,
+    },
     ExprExecError(ExprExecError),
 }
 
@@ -368,6 +483,7 @@ impl From<ExprExecError> for RuntimeError {
 impl Display for RuntimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::ColumnNotFound(c) => write!(f, "Column not found: '{}'", c),
             Self::TableNotFound(t) => write!(f, "Table not found: '{}'", t),
             Self::SchemaNotFound(s) => write!(f, "Schema not found: '{}'", s),
             Self::EmptyRegister(r) => write!(
@@ -382,13 +498,43 @@ impl Display for RuntimeError {
             ),
             Self::CannotReturn(r) => write!(
                 f,
-                "Register value cannot be returned: '{:?}' (critical error. Please file an issue)",
+                "Register value cannot be returned: '{:?}' \
+                 (critical error. Please file an issue)",
                 r
             ),
             Self::FilterWithNonBoolean(e, v) => write!(
                 f,
-                "WHERE clause used with a non-boolean value. Expression: '{}' evaluated to value: '{}'",
+                "WHERE clause used with a non-boolean value. \
+                 Expression: '{}' evaluated to value: '{}'",
                 e, v
+            ),
+            Self::ProjectOnNonEmptyTable(table_name) => write!(
+                f,
+                "Projecting on a non-empty table is not supported. \
+                 Tried projecting onto table: '{}'",
+                table_name
+            ),
+            Self::ProjectTableSizeMismatch {
+                inp_table_name,
+                inp_table_len,
+                out_table_name,
+                out_table_len,
+            } => write!(
+                f,
+                "Projection input and output table had different number of rows. \
+                 Input: '{}' with length {}, Output: '{}' with length {}",
+                inp_table_name, inp_table_len, out_table_name, out_table_len
+            ),
+            Self::TableNewColumnSizeMismatch {
+                table_name,
+                table_len,
+                col_name,
+                col_len,
+            } => write!(
+                f,
+                "New column data size does not match table size. \
+                 Table: '{}' with length {}, New column: '{}' with length {}",
+                table_name, table_len, col_name, col_len,
             ),
             Self::ExprExecError(e) => write!(f, "{}", e),
         }

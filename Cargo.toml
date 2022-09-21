@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 arraystring = "0.3.0"
 sqlparser = "0.18.0"
+hashbrown = "0.12.3"
 
 [features]
 thread-safe = []

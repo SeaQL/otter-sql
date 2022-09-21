@@ -1,6 +1,6 @@
 use sqlparser::ast::{ColumnOption, ColumnOptionDef, DataType};
 
-use crate::{column::Column, value::Value, BoundedString};
+use crate::{column::Column, identifier::ColumnRef, value::Value, vm::RuntimeError, BoundedString};
 
 pub const TABLE_UNIQUE_KEY_NAME: &str = "__otter_unique_key";
 
@@ -22,15 +22,18 @@ pub struct Table {
 impl Table {
     pub fn new(name: BoundedString, mut columns: Vec<Column>) -> Self {
         // every table has a default unique key
-        columns.insert(0, Column::new(
-            TABLE_UNIQUE_KEY_NAME.into(),
-            DataType::UnsignedInt(None),
-            vec![ColumnOptionDef {
-                name: None,
-                option: ColumnOption::Unique { is_primary: false },
-            }],
-            true,
-        ));
+        columns.insert(
+            0,
+            Column::new(
+                TABLE_UNIQUE_KEY_NAME.into(),
+                DataType::UnsignedInt(None),
+                vec![ColumnOptionDef {
+                    name: None,
+                    option: ColumnOption::Unique { is_primary: false },
+                }],
+                true,
+            ),
+        );
 
         Self {
             name,
@@ -92,8 +95,84 @@ impl Table {
         self
     }
 
+    /// Add data for a new column to all rows.
+    pub fn add_column_data(
+        &mut self,
+        col_name: &BoundedString,
+        data: Vec<Value>,
+    ) -> Result<&mut Self, RuntimeError> {
+        let (col_index, _) = self.get_column(col_name)?;
+
+        if self.raw_data.len() != data.len() {
+            return Err(RuntimeError::TableNewColumnSizeMismatch {
+                table_name: *self.name(),
+                table_len: self.raw_data.len(),
+                col_name: *col_name,
+                col_len: data.len(),
+            });
+        }
+
+        if !self.is_empty() {
+            let first_row_size = self.raw_data[0].data.len();
+            if first_row_size == col_index {
+                // column is the last one. just push it at the end.
+                for (row, new_data) in self.raw_data.iter_mut().zip(data.into_iter()) {
+                    row.data.push(new_data);
+                }
+            } else if first_row_size == self.columns.len() {
+                // column data is already added. we replace it.
+                for (row, new_data) in self.raw_data.iter_mut().zip(data.into_iter()) {
+                    row.data[col_index] = new_data;
+                }
+            } else {
+                // when the column is somewhere in the middle or beginning.
+                // perhaps an expensive operation!
+                for (row, new_data) in self.raw_data.iter_mut().zip(data.into_iter()) {
+                    row.data.insert(col_index, new_data)
+                }
+            }
+        }
+
+        Ok(self)
+    }
+
+    /// Map column name to its index and definition.
+    pub fn get_column(&self, col_name: &BoundedString) -> Result<(usize, &Column), RuntimeError> {
+        let idx = self.columns.iter().position(|c| c.name() == col_name);
+        if let Some(idx) = idx {
+            Ok((idx, &self.columns[idx]))
+        } else {
+            return Err(RuntimeError::ColumnNotFound(ColumnRef {
+                schema_name: None,
+                table_name: Some(*self.name()),
+                col_name: *col_name,
+            }));
+        }
+    }
+
+    /// Retrieve all data of a column.
+    pub fn get_column_data(&self, col_name: &BoundedString) -> Result<Vec<Value>, RuntimeError> {
+        let (col_index, _) = self.get_column(col_name)?;
+
+        Ok(self
+            .raw_data
+            .iter()
+            .map(|row| row.data[col_index].clone())
+            .collect())
+    }
+
     pub fn rename(&mut self, new_name: BoundedString) {
         self.name = new_name;
+    }
+
+    /// Whether the table has no rows.
+    pub fn is_empty(&self) -> bool {
+        self.raw_data.is_empty()
+    }
+
+    /// Whether the table has no defined columns.
+    pub fn has_no_columns(&self) -> bool {
+        self.columns().next().is_none()
     }
 }
 
