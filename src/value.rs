@@ -3,6 +3,7 @@ use std::{
     ops::{Add, Div, Mul, Neg, Not, Rem, Sub},
 };
 
+use ordered_float::OrderedFloat;
 use sqlparser::ast::{self, DataType};
 
 use crate::expr::{BinOp, UnOp};
@@ -10,7 +11,7 @@ use crate::expr::{BinOp, UnOp};
 /// A value contained within a table's cell.
 ///
 /// One or more column types may be mapped to a single variant of [`Value`].
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Eq, Ord)]
 pub enum Value {
     Null,
 
@@ -27,7 +28,7 @@ pub enum Value {
     // reference: https://dev.mysql.com/doc/refman/8.0/en/floating-point-types.html
     // note: specifying exact precision and digits is not supported yet
     // TODO: Float32
-    Float64(f64),
+    Float64(OrderedFloat<f64>),
 
     // TODO: date and timestamp
 
@@ -137,7 +138,7 @@ impl TryFrom<ast::Value> for Value {
                     Ok(Value::Int64(int))
                 } else {
                     if let Ok(float) = s.parse::<f64>() {
-                        Ok(Value::Float64(float))
+                        Ok(Value::Float64(float.into()))
                     } else {
                         Err(ValueError {
                             reason: "Unsupported number format",
@@ -405,12 +406,12 @@ mod tests {
 
         assert_eq!(
             Value::try_from(ast::Value::Number("1000.0".to_owned(), false)),
-            Ok(Value::Float64(1000.0))
+            Ok(Value::Float64(1000.0.into()))
         );
 
         assert_eq!(
             Value::try_from(ast::Value::Number("0.300000000000000004".to_owned(), false)),
-            Ok(Value::Float64(0.300000000000000004))
+            Ok(Value::Float64(0.300000000000000004.into()))
         );
 
         assert_eq!(

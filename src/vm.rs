@@ -1,4 +1,5 @@
 use hashbrown::HashMap;
+use permutation::permutation;
 use std::error::Error;
 use std::fmt::Display;
 
@@ -259,7 +260,31 @@ impl VirtualMachine {
                 index,
                 expr,
                 ascending,
-            } => todo!(),
+            } => {
+                let table_index = match self.registers.get(index) {
+                    None => return Err(RuntimeError::EmptyRegister(*index)),
+                    Some(Register::TableRef(table_index)) => table_index,
+                    Some(register) => {
+                        return Err(RuntimeError::RegisterNotATable(
+                            "order by",
+                            register.clone(),
+                        ))
+                    }
+                };
+                let table = self.tables.get_mut(table_index).unwrap();
+
+                let expr_values = table
+                    .raw_data
+                    .iter()
+                    .map(|row| Expr::execute(expr, table, row))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let mut perm = permutation::sort(expr_values);
+                perm.apply_slice_in_place(&mut table.raw_data);
+
+                if !ascending {
+                    table.raw_data.reverse();
+                }
+            }
             Instruction::Limit { index, limit } => todo!(),
             Instruction::NewSchema {
                 schema_name,
