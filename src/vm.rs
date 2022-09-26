@@ -285,7 +285,18 @@ impl VirtualMachine {
                     table.raw_data.reverse();
                 }
             }
-            Instruction::Limit { index, limit } => todo!(),
+            Instruction::Limit { index, limit } => {
+                let table_index = match self.registers.get(index) {
+                    None => return Err(RuntimeError::EmptyRegister(*index)),
+                    Some(Register::TableRef(table_index)) => table_index,
+                    Some(register) => {
+                        return Err(RuntimeError::RegisterNotATable("limit", register.clone()))
+                    }
+                };
+                let table = self.tables.get_mut(table_index).unwrap();
+
+                table.raw_data.truncate(*limit as usize);
+            }
             Instruction::NewSchema {
                 schema_name,
                 exists_ok,
