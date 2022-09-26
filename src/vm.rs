@@ -300,7 +300,14 @@ impl VirtualMachine {
             Instruction::NewSchema {
                 schema_name,
                 exists_ok,
-            } => todo!(),
+            } => {
+                let name = schema_name.0;
+                if let None = self.database.schema_by_name(&name) {
+                    self.database.add_schema(Schema::new(name));
+                } else if !*exists_ok {
+                    return Err(RuntimeError::SchemaExists(name));
+                }
+            }
             Instruction::ColumnDef {
                 index,
                 name,
@@ -490,6 +497,7 @@ pub enum RuntimeError {
     ColumnNotFound(ColumnRef),
     TableNotFound(TableRef),
     SchemaNotFound(BoundedString),
+    SchemaExists(BoundedString),
     EmptyRegister(RegisterIndex),
     RegisterNotATable(&'static str, Register),
     CannotReturn(Register),
@@ -522,6 +530,7 @@ impl Display for RuntimeError {
             Self::ColumnNotFound(c) => write!(f, "Column not found: '{}'", c),
             Self::TableNotFound(t) => write!(f, "Table not found: '{}'", t),
             Self::SchemaNotFound(s) => write!(f, "Schema not found: '{}'", s),
+            Self::SchemaExists(s) => write!(f, "Schema already exists: '{}'", s),
             Self::EmptyRegister(r) => write!(
                 f,
                 "Register is not initialized: '{}' (critical error. Please file an issue.)",
