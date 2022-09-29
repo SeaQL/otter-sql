@@ -330,12 +330,54 @@ impl VirtualMachine {
                 index,
                 name,
                 data_type,
-            } => todo!(),
-            Instruction::AddColumnOption { index, option } => todo!(),
+            } => {
+                self.registers.insert(
+                    *index,
+                    Register::Column(Column::new(*name, data_type.clone(), vec![], false)),
+                );
+            }
+            Instruction::AddColumnOption { index, option } => {
+                let column = match self.registers.get_mut(index) {
+                    Some(Register::Column(column)) => column,
+                    Some(register) => {
+                        return Err(RuntimeError::RegisterNotAColumn(
+                            "add column option",
+                            register.clone(),
+                        ))
+                    }
+                    None => return Err(RuntimeError::EmptyRegister(*index)),
+                };
+                column.add_column_option(option.clone());
+            }
             Instruction::AddColumn {
                 table_reg_index,
                 col_index,
-            } => todo!(),
+            } => {
+                let table_index = match self.registers.get(table_reg_index) {
+                    None => return Err(RuntimeError::EmptyRegister(*table_reg_index)),
+                    Some(Register::TableRef(table_index)) => table_index,
+                    Some(register) => {
+                        return Err(RuntimeError::RegisterNotATable(
+                            "add column",
+                            register.clone(),
+                        ))
+                    }
+                };
+                let table = self.tables.get_mut(table_index).unwrap();
+
+                let column = match self.registers.get(col_index) {
+                    Some(Register::Column(column)) => column,
+                    Some(register) => {
+                        return Err(RuntimeError::RegisterNotAColumn(
+                            "add column",
+                            register.clone(),
+                        ))
+                    }
+                    None => return Err(RuntimeError::EmptyRegister(*col_index)),
+                };
+
+                table.add_column(column.clone());
+            }
             Instruction::NewTable {
                 index,
                 name,
@@ -518,6 +560,7 @@ pub enum RuntimeError {
     SchemaExists(BoundedString),
     EmptyRegister(RegisterIndex),
     RegisterNotATable(&'static str, Register),
+    RegisterNotAColumn(&'static str, Register),
     CannotReturn(Register),
     FilterWithNonBoolean(Expr, Value),
     ProjectOnNonEmptyTable(BoundedString),
@@ -558,6 +601,11 @@ impl Display for RuntimeError {
             Self::RegisterNotATable(operation, reg) => write!(
                 f,
                 "Register is not a table. Cannot perform '{}' on '{:?}'",
+                operation, reg
+            ),
+            Self::RegisterNotAColumn(operation, reg) => write!(
+                f,
+                "Register is not a column. Cannot perform '{}' on '{:?}'",
                 operation, reg
             ),
             Self::CannotReturn(r) => write!(
