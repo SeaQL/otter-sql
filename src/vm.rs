@@ -1,5 +1,6 @@
 use hashbrown::HashMap;
 use permutation::permutation;
+use sqlparser::ast::DataType;
 use std::error::Error;
 use std::fmt::Display;
 
@@ -241,8 +242,25 @@ impl VirtualMachine {
                             out_row.data.push(val);
                         }
 
-                        // TOOD: get type from the expression and add column based on it.
-                        // let new_col = Column {name: "PLACEHOLDER".into(), data_type:}
+                        let data_type = if !out_table.raw_data.is_empty() {
+                            let newly_added =
+                                out_table.raw_data.first().unwrap().data.last().unwrap();
+                            newly_added.data_type()
+                        } else {
+                            let sentinel = inp_table.sentinel_row()?;
+                            let output_val = Expr::execute(expr, inp_table, &sentinel)?;
+                            output_val.data_type()
+                        };
+
+                        // TODO: provide a unique name here
+                        let new_col = Column::new(
+                            alias.unwrap_or("PLACEHOLDER".into()),
+                            data_type,
+                            vec![],
+                            false,
+                        );
+
+                        out_table.add_column(new_col);
                     }
                 }
                 (Some(reg), Some(Register::TableRef(_))) => {
@@ -515,6 +533,7 @@ pub enum RuntimeError {
         col_name: BoundedString,
         col_len: usize,
     },
+    UnsupportedType(DataType),
     ExprExecError(ExprExecError),
 }
 
@@ -581,6 +600,7 @@ impl Display for RuntimeError {
                  Table: '{}' with length {}, New column: '{}' with length {}",
                 table_name, table_len, col_name, col_len,
             ),
+            Self::UnsupportedType(d) => write!(f, "Unsupported type: {}", d),
             Self::ExprExecError(e) => write!(f, "{}", e),
         }
     }

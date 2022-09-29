@@ -174,6 +174,18 @@ impl Table {
     pub fn has_no_columns(&self) -> bool {
         self.columns().next().is_none()
     }
+
+    /// Create a new row filled with sentinel values for the data type.
+    ///
+    /// Note: does not add the row to the table.
+    pub(crate) fn sentinel_row(&self) -> Result<Row, RuntimeError> {
+        let data = self
+            .columns
+            .iter()
+            .map(|c| Value::sentinel_value(c.data_type()))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Row { data })
+    }
 }
 
 /// A row in a table. Represents a relation in relational algebra terms.

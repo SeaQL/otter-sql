@@ -6,7 +6,10 @@ use std::{
 use ordered_float::OrderedFloat;
 use sqlparser::ast::{self, DataType};
 
-use crate::expr::{BinOp, UnOp};
+use crate::{
+    expr::{BinOp, UnOp},
+    vm::RuntimeError,
+};
 
 /// A value contained within a table's cell.
 ///
@@ -121,6 +124,18 @@ impl Value {
             Self::String(_) => DataType::String,
             Self::Binary(_) => DataType::Bytea,
         }
+    }
+
+    /// Create a new sentinel value of given type.
+    pub(crate) fn sentinel_value(data_type: &DataType) -> Result<Self, RuntimeError> {
+        Ok(match data_type {
+            DataType::Boolean => Self::Bool(false),
+            DataType::Int(_) => Self::Int64(0),
+            DataType::Float(_) => Self::Float64(0.0.into()),
+            DataType::String => Self::String("".to_owned()),
+            DataType::Bytea => Self::Binary(vec![]),
+            _ => return Err(RuntimeError::UnsupportedType(data_type.clone())),
+        })
     }
 }
 

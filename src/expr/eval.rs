@@ -166,7 +166,7 @@ mod test {
         column::Column,
         expr::{BinOp, Expr, UnOp},
         table::{Row, Table},
-        value::{Value, ValueBinaryOpError, ValueUnaryOpError}
+        value::{Value, ValueBinaryOpError, ValueUnaryOpError},
     };
 
     use super::ExprExecError;
