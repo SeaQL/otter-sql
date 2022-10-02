@@ -382,7 +382,35 @@ impl VirtualMachine {
                 index,
                 name,
                 exists_ok,
-            } => todo!(),
+            } => {
+                let table_index = *match self.registers.get(index) {
+                    None => return Err(RuntimeError::EmptyRegister(*index)),
+                    Some(Register::TableRef(table_index)) => table_index,
+                    Some(register) => {
+                        return Err(RuntimeError::RegisterNotATable(
+                            "new table",
+                            register.clone(),
+                        ))
+                    }
+                };
+
+                let schema = self.find_schema(name.schema_name)?;
+
+                let table_name = name.table_name;
+
+                match self.find_table(schema, name, &table_name) {
+                    Ok(_) => {
+                        if !exists_ok {
+                            return Err(RuntimeError::TableExists(*name));
+                        }
+                    }
+                    Err(RuntimeError::TableNotFound(_)) => {
+                        self.find_schema_mut(name.schema_name)?
+                            .add_table(table_index);
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
             Instruction::DropTable { index } => todo!(),
             Instruction::RemoveColumn { index, col_name } => todo!(),
             Instruction::RenameColumn {
@@ -439,6 +467,33 @@ impl VirtualMachine {
             Ok(*table_index)
         } else {
             Err(RuntimeError::TableNotFound(table.clone()))
+        }
+    }
+
+    /// A reference to the given schema, or default schema if it's `None`.
+    fn find_schema(&self, name: Option<BoundedString>) -> Result<&Schema, RuntimeError> {
+        if let Some(schema_name) = name {
+            match self.database.schema_by_name(&schema_name) {
+                Some(schema) => Ok(schema),
+                None => return Err(RuntimeError::SchemaNotFound(schema_name)),
+            }
+        } else {
+            Ok(self.database.default_schema())
+        }
+    }
+
+    /// A mutable reference to the given schema, or default schema if it's `None`.
+    fn find_schema_mut(
+        &mut self,
+        name: Option<BoundedString>,
+    ) -> Result<&mut Schema, RuntimeError> {
+        if let Some(schema_name) = name {
+            match self.database.schema_by_name_mut(&schema_name) {
+                Some(schema) => Ok(schema),
+                None => return Err(RuntimeError::SchemaNotFound(schema_name)),
+            }
+        } else {
+            Ok(self.database.default_schema_mut())
         }
     }
 }
@@ -556,6 +611,7 @@ impl Error for ExecutionError {}
 pub enum RuntimeError {
     ColumnNotFound(ColumnRef),
     TableNotFound(TableRef),
+    TableExists(TableRef),
     SchemaNotFound(BoundedString),
     SchemaExists(BoundedString),
     EmptyRegister(RegisterIndex),
@@ -591,6 +647,7 @@ impl Display for RuntimeError {
         match self {
             Self::ColumnNotFound(c) => write!(f, "Column not found: '{}'", c),
             Self::TableNotFound(t) => write!(f, "Table not found: '{}'", t),
+            Self::TableExists(s) => write!(f, "Table already exists: '{}'", s),
             Self::SchemaNotFound(s) => write!(f, "Schema not found: '{}'", s),
             Self::SchemaExists(s) => write!(f, "Schema already exists: '{}'", s),
             Self::EmptyRegister(r) => write!(

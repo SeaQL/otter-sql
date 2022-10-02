@@ -39,8 +39,18 @@ impl Database {
         &self.schemas[0]
     }
 
+    /// Mutable reference to the default schema.
+    pub fn default_schema_mut(&mut self) -> &mut Schema {
+        // ensure that the default schema is always the first
+        &mut self.schemas[0]
+    }
+
     pub fn schema_by_name(&self, name: &BoundedString) -> Option<&Schema> {
         self.schemas().iter().find(|s| s.name() == name)
+    }
+
+    pub fn schema_by_name_mut(&mut self, name: &BoundedString) -> Option<&mut Schema> {
+        self.schemas.iter_mut().find(|s| s.name() == name)
     }
 }
 
