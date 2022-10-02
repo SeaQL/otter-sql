@@ -203,9 +203,9 @@ mod test {
 
         assert_eq!(exec_str_no_context("1"), Ok(Value::Int64(1)));
 
-        assert_eq!(exec_str_no_context("1.1"), Ok(Value::Float64(1.1)));
+        assert_eq!(exec_str_no_context("1.1"), Ok(Value::Float64(1.1.into())));
 
-        assert_eq!(exec_str_no_context(".1"), Ok(Value::Float64(0.1)));
+        assert_eq!(exec_str_no_context(".1"), Ok(Value::Float64(0.1.into())));
 
         assert_eq!(
             exec_str_no_context("'str'"),
@@ -273,32 +273,32 @@ mod test {
     #[test]
     fn exec_arithmetic() {
         assert_eq!(exec_str_no_context("1 + 1"), Ok(Value::Int64(2)));
-        assert_eq!(exec_str_no_context("1.1 + 1.1"), Ok(Value::Float64(2.2)));
+        assert_eq!(exec_str_no_context("1.1 + 1.1"), Ok(Value::Float64(2.2.into())));
 
         // this applies to all binary ops
         assert_eq!(
             exec_str_no_context("1 + 1.1"),
             Err(ValueBinaryOpError {
                 operator: BinOp::Plus,
-                values: (Value::Int64(1), Value::Float64(1.1))
+                values: (Value::Int64(1), Value::Float64(1.1.into()))
             }
             .into())
         );
 
         assert_eq!(exec_str_no_context("4 - 2"), Ok(Value::Int64(2)));
         assert_eq!(exec_str_no_context("4 - 6"), Ok(Value::Int64(-2)));
-        assert_eq!(exec_str_no_context("4.5 - 2.2"), Ok(Value::Float64(2.3)));
+        assert_eq!(exec_str_no_context("4.5 - 2.2"), Ok(Value::Float64(2.3.into())));
 
         assert_eq!(exec_str_no_context("4 * 2"), Ok(Value::Int64(8)));
-        assert_eq!(exec_str_no_context("0.5 * 2.2"), Ok(Value::Float64(1.1)));
+        assert_eq!(exec_str_no_context("0.5 * 2.2"), Ok(Value::Float64(1.1.into())));
 
         assert_eq!(exec_str_no_context("4 / 2"), Ok(Value::Int64(2)));
         assert_eq!(exec_str_no_context("4 / 3"), Ok(Value::Int64(1)));
-        assert_eq!(exec_str_no_context("4.0 / 2.0"), Ok(Value::Float64(2.0)));
-        assert_eq!(exec_str_no_context("5.1 / 2.5"), Ok(Value::Float64(2.04)));
+        assert_eq!(exec_str_no_context("4.0 / 2.0"), Ok(Value::Float64(2.0.into())));
+        assert_eq!(exec_str_no_context("5.1 / 2.5"), Ok(Value::Float64(2.04.into())));
 
         assert_eq!(exec_str_no_context("5 % 2"), Ok(Value::Int64(1)));
-        assert_eq!(exec_str_no_context("5.5 % 2.5"), Ok(Value::Float64(0.5)));
+        assert_eq!(exec_str_no_context("5.5 % 2.5"), Ok(Value::Float64(0.5.into())));
     }
 
     #[test]
