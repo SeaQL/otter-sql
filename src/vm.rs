@@ -421,17 +421,125 @@ impl VirtualMachine {
             Instruction::InsertDef {
                 table_reg_index,
                 index,
-            } => todo!(),
+            } => {
+                let table_index = *match self.registers.get(table_reg_index) {
+                    None => return Err(RuntimeError::EmptyRegister(*table_reg_index)),
+                    Some(Register::TableRef(table_index)) => table_index,
+                    Some(register) => {
+                        return Err(RuntimeError::RegisterNotATable(
+                            "insert def",
+                            register.clone(),
+                        ))
+                    }
+                };
+
+                self.registers
+                    .insert(*index, Register::InsertDef(InsertDef::new(table_index)));
+            }
             Instruction::ColumnInsertDef {
                 insert_index,
                 col_name,
-            } => todo!(),
+            } => {
+                let insert = match self.registers.get_mut(insert_index) {
+                    Some(Register::InsertDef(insert)) => insert,
+                    Some(register) => {
+                        return Err(RuntimeError::RegisterNotAInsert(
+                            "column insert def",
+                            register.clone(),
+                        ))
+                    }
+                    None => return Err(RuntimeError::EmptyRegister(*insert_index)),
+                };
+
+                let table = self.tables.get(&insert.table).unwrap();
+
+                let col_info = table.get_column(col_name)?;
+
+                insert.columns.push((col_info.0, col_info.1.to_owned()));
+            }
             Instruction::RowDef {
                 insert_index,
-                row_index,
-            } => todo!(),
-            Instruction::AddValue { row_index, expr } => todo!(),
-            Instruction::Insert { index } => todo!(),
+                row_index: row_reg_index,
+            } => {
+                let insert = match self.registers.get_mut(insert_index) {
+                    Some(Register::InsertDef(insert)) => insert,
+                    Some(register) => {
+                        return Err(RuntimeError::RegisterNotAInsert(
+                            "row def",
+                            register.clone(),
+                        ))
+                    }
+                    None => return Err(RuntimeError::EmptyRegister(*insert_index)),
+                };
+
+                insert.rows.push(vec![]);
+                let row_index = insert.rows.len() - 1;
+
+                self.registers.insert(
+                    *row_reg_index,
+                    Register::InsertRow(InsertRow {
+                        def: *insert_index,
+                        row_index,
+                    }),
+                );
+            }
+            Instruction::AddValue {
+                row_index: row_reg_index,
+                expr,
+            } => {
+                let &InsertRow {
+                    def: insert_reg_index,
+                    row_index,
+                } = match self.registers.get(row_reg_index) {
+                    Some(Register::InsertRow(insert_row)) => insert_row,
+                    Some(register) => {
+                        return Err(RuntimeError::RegisterNotAInsertRow(
+                            "add value",
+                            register.clone(),
+                        ))
+                    }
+                    None => return Err(RuntimeError::EmptyRegister(*row_reg_index)),
+                };
+
+                let insert = match self.registers.get_mut(&insert_reg_index) {
+                    Some(Register::InsertDef(insert)) => insert,
+                    Some(register) => {
+                        return Err(RuntimeError::RegisterNotAInsert(
+                            "row def",
+                            register.clone(),
+                        ))
+                    }
+                    None => return Err(RuntimeError::EmptyRegister(insert_reg_index)),
+                };
+
+                let table = self.tables.get(&insert.table).unwrap();
+
+                let value = Expr::execute(expr, table, &table.sentinel_row()?)?;
+
+                insert.rows[row_index].push(value);
+            }
+            Instruction::Insert {
+                index: insert_index,
+            } => {
+                let insert = match self.registers.remove(insert_index) {
+                    Some(Register::InsertDef(insert)) => insert,
+                    Some(register) => {
+                        return Err(RuntimeError::RegisterNotAInsert("insert", register.clone()))
+                    }
+                    None => return Err(RuntimeError::EmptyRegister(*insert_index)),
+                };
+
+                let table = self.tables.get_mut(&insert.table).unwrap();
+
+                if insert.columns.is_empty() {
+                    for row in insert.rows {
+                        table.new_row(row);
+                    }
+                } else {
+                    // TODO: fill missing values with sentinel?
+                    todo!()
+                }
+            }
             Instruction::Update { index, col, expr } => todo!(),
             Instruction::Union {
                 input1,
@@ -542,19 +650,19 @@ pub struct TableDef {
 /// An abstract definition of an insert statement.
 pub struct InsertDef {
     /// The view to insert into
-    pub table_name: BoundedString,
+    pub table: TableIndex,
     /// The columns to insert into.
     ///
     /// Empty means all columns.
-    pub columns: Vec<Column>,
+    pub columns: Vec<(usize, Column)>,
     /// The values to insert.
-    pub rows: Vec<InsertRow>,
+    pub rows: Vec<Vec<Value>>,
 }
 
 impl InsertDef {
-    pub fn new(table_name: BoundedString) -> Self {
+    pub fn new(table: TableIndex) -> Self {
         Self {
-            table_name,
+            table,
             columns: Vec::new(),
             rows: Vec::new(),
         }
@@ -564,10 +672,10 @@ impl InsertDef {
 #[derive(Debug, Clone)]
 /// A row of values to insert.
 pub struct InsertRow {
-    /// The values
-    pub values: Vec<Value>,
     /// The insert definition which this belongs to
-    pub def: Mrc<InsertDef>,
+    pub def: RegisterIndex,
+    /// Which row of the insert definition this refers to
+    pub row_index: usize,
 }
 
 #[derive(Debug)]
@@ -617,6 +725,8 @@ pub enum RuntimeError {
     EmptyRegister(RegisterIndex),
     RegisterNotATable(&'static str, Register),
     RegisterNotAColumn(&'static str, Register),
+    RegisterNotAInsert(&'static str, Register),
+    RegisterNotAInsertRow(&'static str, Register),
     CannotReturn(Register),
     FilterWithNonBoolean(Expr, Value),
     ProjectOnNonEmptyTable(BoundedString),
@@ -663,6 +773,16 @@ impl Display for RuntimeError {
             Self::RegisterNotAColumn(operation, reg) => write!(
                 f,
                 "Register is not a column. Cannot perform '{}' on '{:?}'",
+                operation, reg
+            ),
+            Self::RegisterNotAInsert(operation, reg) => write!(
+                f,
+                "Register is not an insert def. Cannot perform '{}' on '{:?}'",
+                operation, reg
+            ),
+            Self::RegisterNotAInsertRow(operation, reg) => write!(
+                f,
+                "Register is not an insert row. Cannot perform '{}' on '{:?}'",
                 operation, reg
             ),
             Self::CannotReturn(r) => write!(
