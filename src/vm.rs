@@ -16,7 +16,7 @@ use crate::parser::parse;
 use crate::schema::Schema;
 use crate::table::{Row, Table};
 use crate::value::Value;
-use crate::{BoundedString, Database, Mrc};
+use crate::{BoundedString, Database};
 
 const DEFAULT_DATABASE_NAME: &str = "default";
 
@@ -130,16 +130,16 @@ impl VirtualMachine {
             Instruction::Source { index, name } => match name {
                 TableRef {
                     schema_name: None,
-                    table_name,
+                    table_name: _,
                 } => {
                     let table_index =
-                        self.find_table(self.database.default_schema(), name, table_name)?;
+                        self.find_table(self.database.default_schema(), name)?;
                     self.registers
                         .insert(*index, Register::TableRef(table_index));
                 }
                 TableRef {
                     schema_name: Some(schema_name),
-                    table_name,
+                    table_name: _,
                 } => {
                     let schema = if let Some(schema) = self.database.schema_by_name(schema_name) {
                         schema
@@ -147,7 +147,7 @@ impl VirtualMachine {
                         return Err(RuntimeError::SchemaNotFound(*schema_name));
                     };
 
-                    let table_index = self.find_table(schema, name, table_name)?;
+                    let table_index = self.find_table(schema, name)?;
                     self.registers
                         .insert(*index, Register::TableRef(table_index));
                 }
@@ -396,9 +396,7 @@ impl VirtualMachine {
 
                 let schema = self.find_schema(name.schema_name)?;
 
-                let table_name = name.table_name;
-
-                match self.find_table(schema, name, &table_name) {
+                match self.find_table(schema, name) {
                     Ok(_) => {
                         if !exists_ok {
                             return Err(RuntimeError::TableExists(*name));
@@ -565,12 +563,11 @@ impl VirtualMachine {
         &self,
         schema: &Schema,
         table: &TableRef,
-        table_name: &BoundedString,
     ) -> Result<TableIndex, RuntimeError> {
         if let Some(table_index) = schema
             .tables()
             .iter()
-            .find(|table_index| self.tables[table_index].name() == table_name)
+            .find(|table_index| self.tables[table_index].name() == &table.table_name)
         {
             Ok(*table_index)
         } else {
