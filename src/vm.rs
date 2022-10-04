@@ -394,6 +394,9 @@ impl VirtualMachine {
                     }
                 };
 
+                let table = self.tables.get_mut(&table_index).unwrap();
+                table.rename(name.table_name);
+
                 let schema = self.find_schema(name.schema_name)?;
 
                 match self.find_table(schema, name) {
