@@ -833,10 +833,95 @@ impl Display for RuntimeError {
 
 #[cfg(test)]
 mod tests {
-    use super::VirtualMachine;
+    use sqlparser::ast::{ColumnOption, ColumnOptionDef, DataType};
+
+    use crate::{
+        codegen::codegen, column::Column, identifier::TableRef, parser::parse, table::Table,
+    };
+
+    use super::{RuntimeError, VirtualMachine};
 
     #[test]
     fn create_vm() {
         let _ = VirtualMachine::default();
+    }
+
+    fn check_single_statement(
+        query: &str,
+        vm: &mut VirtualMachine,
+    ) -> Result<Option<Table>, RuntimeError> {
+        let parsed = parse(query).unwrap();
+        assert_eq!(parsed.len(), 1);
+
+        let statement = &parsed[0];
+        let ic = codegen(&statement).unwrap();
+
+        vm.execute_ic(&ic)
+    }
+
+    #[test]
+    fn create_table() {
+        let mut vm = VirtualMachine::default();
+        let _res = check_single_statement(
+            "CREATE TABLE
+             IF NOT EXISTS table1
+             (
+                 col1 INTEGER PRIMARY KEY NOT NULL,
+                 col2 STRING NOT NULL,
+                 col3 INTEGER UNIQUE
+             )",
+            &mut vm,
+        )
+        .unwrap();
+
+        let table_index = vm
+            .find_table(
+                vm.database.default_schema(),
+                &TableRef {
+                    schema_name: None,
+                    table_name: "table1".into(),
+                },
+            )
+            .unwrap();
+
+        let table = vm.table(&table_index).unwrap();
+        assert_eq!(
+            table.columns().cloned().collect::<Vec<_>>(),
+            vec![
+                Column::new(
+                    "col1".into(),
+                    DataType::Int(None),
+                    vec![
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Unique { is_primary: true },
+                        },
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull
+                        }
+                    ],
+                    false
+                ),
+                Column::new(
+                    "col2".into(),
+                    DataType::String,
+                    vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::NotNull
+                    }],
+                    false
+                ),
+                Column::new(
+                    "col3".into(),
+                    DataType::Int(None),
+                    vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::Unique { is_primary: false },
+                    }],
+                    false
+                ),
+            ]
+        )
     }
 }
