@@ -131,6 +131,7 @@ impl Value {
         Ok(match data_type {
             DataType::Boolean => Self::Bool(false),
             DataType::Int(_) => Self::Int64(0),
+            DataType::UnsignedInt(_) => Self::Int64(0),
             DataType::Float(_) => Self::Float64(0.0.into()),
             DataType::String => Self::String("".to_owned()),
             DataType::Bytea => Self::Binary(vec![]),

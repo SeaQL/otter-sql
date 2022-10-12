@@ -831,7 +831,12 @@ mod tests {
     use sqlparser::ast::{ColumnOption, ColumnOptionDef, DataType};
 
     use crate::{
-        codegen::codegen, column::Column, identifier::TableRef, parser::parse, table::Table,
+        codegen::codegen,
+        column::Column,
+        identifier::TableRef,
+        parser::parse,
+        table::{Row, Table},
+        value::Value,
     };
 
     use super::{RuntimeError, VirtualMachine};
@@ -936,5 +941,67 @@ mod tests {
                 ),
             ]
         )
+    }
+
+    #[test]
+    fn insert_values() {
+        let mut vm = VirtualMachine::default();
+
+        let _res = check_single_statement(
+            "
+            CREATE TABLE table1
+            (
+                col1 INTEGER PRIMARY KEY NOT NULL,
+                col2 STRING NOT NULL
+            )
+            ",
+            &mut vm,
+        )
+        .unwrap();
+
+        let _res = check_single_statement(
+            "
+            INSERT INTO table1 VALUES
+                (2, 'bar'),
+                (3, 'baz')
+            ",
+            &mut vm,
+        )
+        .unwrap();
+
+        let table_index = vm
+            .find_table(
+                vm.database.default_schema(),
+                &TableRef {
+                    schema_name: None,
+                    table_name: "table1".into(),
+                },
+            )
+            .unwrap();
+
+        let table = vm.table(&table_index).unwrap();
+
+        assert_eq!(
+            table.all_data(),
+            vec![
+                Row {
+                    data: vec![Value::Int64(2), Value::String("bar".to_owned())]
+                },
+                Row {
+                    data: vec![Value::Int64(3), Value::String("baz".to_owned())]
+                }
+            ]
+        );
+
+        // TODO: test this once implemented
+        // let _res = check_single_statement(
+        //     "
+        //     INSERT INTO table1 (col1, col2) VALUES
+        //         (2, 'bar'),
+        //         (3, 'baz')
+        //     ",
+        //     &mut vm,
+        // )
+        // .unwrap();
     }
 }
