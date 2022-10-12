@@ -132,8 +132,7 @@ impl VirtualMachine {
                     schema_name: None,
                     table_name: _,
                 } => {
-                    let table_index =
-                        self.find_table(self.database.default_schema(), name)?;
+                    let table_index = self.find_table(self.database.default_schema(), name)?;
                     self.registers
                         .insert(*index, Register::TableRef(table_index));
                 }
@@ -562,11 +561,7 @@ impl VirtualMachine {
     }
 
     /// Find [`TableIndex`] given the schema and its name.
-    fn find_table(
-        &self,
-        schema: &Schema,
-        table: &TableRef,
-    ) -> Result<TableIndex, RuntimeError> {
+    fn find_table(&self, schema: &Schema, table: &TableRef) -> Result<TableIndex, RuntimeError> {
         if let Some(table_index) = schema
             .tables()
             .iter()
@@ -612,7 +607,7 @@ impl Default for VirtualMachine {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// A register in the executor VM.
 pub enum Register {
     /// A reference to a table.
@@ -639,14 +634,14 @@ pub enum Register {
     // TODO: an error value?
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// An abstract definition of a create table statement.
 pub struct TableDef {
     pub name: BoundedString,
     pub columns: Vec<Column>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// An abstract definition of an insert statement.
 pub struct InsertDef {
     /// The view to insert into
@@ -669,7 +664,7 @@ impl InsertDef {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// A row of values to insert.
 pub struct InsertRow {
     /// The insert definition which this belongs to
@@ -715,7 +710,7 @@ impl Display for ExecutionError {
 
 impl Error for ExecutionError {}
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum RuntimeError {
     ColumnNotFound(ColumnRef),
     TableNotFound(TableRef),
@@ -857,6 +852,24 @@ mod tests {
         let ic = codegen(&statement).unwrap();
 
         vm.execute_ic(&ic)
+    }
+
+    #[test]
+    fn create_schema() {
+        let mut vm = VirtualMachine::default();
+
+        let _res = check_single_statement("CREATE SCHEMA abc", &mut vm).unwrap();
+        let schema = vm.database.schema_by_name(&"abc".into()).unwrap();
+        assert_eq!(schema.name(), "abc");
+        assert_eq!(schema.tables(), &vec![]);
+
+        let res = check_single_statement("CREATE SCHEMA abc", &mut vm).unwrap_err();
+        assert_eq!(res, RuntimeError::SchemaExists("abc".into()));
+
+        let _res = check_single_statement("CREATE SCHEMA IF NOT EXISTS abc", &mut vm).unwrap();
+        let schema = vm.database.schema_by_name(&"abc".into()).unwrap();
+        assert_eq!(schema.name(), "abc");
+        assert_eq!(schema.tables(), &vec![]);
     }
 
     #[test]
