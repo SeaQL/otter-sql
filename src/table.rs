@@ -109,7 +109,7 @@ impl Table {
     ) -> Result<&mut Self, RuntimeError> {
         let (col_index, _) = self.get_column(col_name)?;
 
-        if self.raw_data.len() != data.len() {
+        if !self.is_empty() && self.raw_data.len() != data.len() {
             return Err(RuntimeError::TableNewColumnSizeMismatch {
                 table_name: *self.name(),
                 table_len: self.raw_data.len(),
@@ -136,6 +136,10 @@ impl Table {
                 for (row, new_data) in self.raw_data.iter_mut().zip(data.into_iter()) {
                     row.data.insert(col_index, new_data)
                 }
+            }
+        } else {
+            for value in data {
+                self.new_row(vec![value]);
             }
         }
 
