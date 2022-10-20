@@ -1066,4 +1066,30 @@ mod tests {
         // )
         // .unwrap();
     }
+
+    #[test]
+    fn select() {
+        let mut vm = VirtualMachine::default();
+
+        let res = check_single_statement("SELECT 1", &mut vm)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            res.columns().collect::<Vec<_>>(),
+            vec![&Column::new(
+                "PLACEHOLDER".into(),
+                DataType::Int(None),
+                vec![],
+                false
+            ),]
+        );
+
+        assert_eq!(
+            res.all_data(),
+            vec![Row {
+                data: vec![Value::Int64(1)]
+            }]
+        );
+    }
 }
