@@ -1085,11 +1085,79 @@ mod tests {
             ),]
         );
 
+        // assert_eq!(
+        //     res.all_data(),
+        //     vec![Row {
+        //         data: vec![Value::Int64(1)]
+        //     }]
+        // );
+
+        check_single_statement(
+            "
+            CREATE TABLE table1
+            (
+                col1 INTEGER PRIMARY KEY NOT NULL,
+                col2 STRING NOT NULL
+            )
+            ",
+            &mut vm,
+        )
+        .unwrap();
+
+        check_single_statement(
+            "
+            INSERT INTO table1 VALUES
+                (2, 'bar'),
+                (3, 'baz')
+            ",
+            &mut vm,
+        )
+        .unwrap();
+
+        let res = check_single_statement("SELECT * FROM table1", &mut vm)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            res.columns().cloned().collect::<Vec<_>>(),
+            vec![
+                Column::new(
+                    "col1".into(),
+                    DataType::Int(None),
+                    vec![
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Unique { is_primary: true },
+                        },
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull
+                        }
+                    ],
+                    false
+                ),
+                Column::new(
+                    "col2".into(),
+                    DataType::String,
+                    vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::NotNull
+                    }],
+                    false
+                ),
+            ]
+        );
+
         assert_eq!(
             res.all_data(),
-            vec![Row {
-                data: vec![Value::Int64(1)]
-            }]
+            vec![
+                Row {
+                    data: vec![Value::Int64(2), Value::String("bar".to_owned())]
+                },
+                Row {
+                    data: vec![Value::Int64(3), Value::String("baz".to_owned())]
+                }
+            ]
         );
     }
 }
