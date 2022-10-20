@@ -88,6 +88,12 @@ impl Table {
         self.columns.iter().filter(|c| !c.is_internal())
     }
 
+    /// Number of actual columns.
+    pub fn num_columns(&self) -> usize {
+        // TODO: keep track of this count instead of calculating every time
+        self.columns().count()
+    }
+
     /// Add a new column to the table.
     // TODO: does not add the column data to the rows.
     pub fn add_column(&mut self, column: Column) -> &mut Self {

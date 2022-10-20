@@ -516,6 +516,14 @@ impl VirtualMachine {
 
                 let value = Expr::execute(expr, table, &table.sentinel_row()?)?;
 
+                if insert.rows[row_index].len() + 1 > table.num_columns() {
+                    return Err(RuntimeError::TooManyValuesToInsert(
+                        *table.name(),
+                        insert.rows[row_index].len() + 1,
+                        table.num_columns(),
+                    ));
+                }
+
                 insert.rows[row_index].push(value);
             }
             Instruction::Insert {
@@ -533,6 +541,13 @@ impl VirtualMachine {
 
                 if insert.columns.is_empty() {
                     for row in insert.rows {
+                        if table.num_columns() != row.len() {
+                            return Err(RuntimeError::NotEnoughValuesToInsert(
+                                *table.name(),
+                                row.len(),
+                                table.num_columns(),
+                            ));
+                        }
                         table.new_row(row);
                     }
                 } else {
@@ -739,6 +754,8 @@ pub enum RuntimeError {
     },
     UnsupportedType(DataType),
     ExprExecError(ExprExecError),
+    TooManyValuesToInsert(BoundedString, usize, usize),
+    NotEnoughValuesToInsert(BoundedString, usize, usize),
 }
 
 impl From<ExprExecError> for RuntimeError {
@@ -822,6 +839,22 @@ impl Display for RuntimeError {
             ),
             Self::UnsupportedType(d) => write!(f, "Unsupported type: {}", d),
             Self::ExprExecError(e) => write!(f, "{}", e),
+            Self::TooManyValuesToInsert(table_name, got_num, expected_num) => write!(
+                f,
+                concat!(
+                    "Too many values to insert into table '{}'. ",
+                    "Got at least {} values while the table has {} columns."
+                ),
+                table_name, got_num, expected_num
+            ),
+            Self::NotEnoughValuesToInsert(table_name, got_num, expected_num) => write!(
+                f,
+                concat!(
+                    "Not enough values to insert into table '{}'. ",
+                    "Got at {} values while {} columns were expected."
+                ),
+                table_name, got_num, expected_num
+            ),
         }
     }
 }
@@ -947,7 +980,7 @@ mod tests {
     fn insert_values() {
         let mut vm = VirtualMachine::default();
 
-        let _res = check_single_statement(
+        check_single_statement(
             "
             CREATE TABLE table1
             (
@@ -991,6 +1024,33 @@ mod tests {
                     data: vec![Value::Int64(3), Value::String("baz".to_owned())]
                 }
             ]
+        );
+
+        let res = check_single_statement(
+            "
+            INSERT INTO table1 VALUES
+                (2, 'bar', 1.9)
+            ",
+            &mut vm,
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            res,
+            RuntimeError::TooManyValuesToInsert("table1".into(), 3, 2)
+        );
+
+        let res = check_single_statement(
+            "
+            INSERT INTO table1 VALUES
+                ('bar')
+            ",
+            &mut vm,
+        );
+
+        assert_eq!(
+            res.unwrap_err(),
+            RuntimeError::NotEnoughValuesToInsert("table1".into(), 1, 2)
         );
 
         // TODO: test this once implemented
