@@ -80,6 +80,7 @@ impl VirtualMachine {
     pub fn new_temp_table(&mut self) -> TableIndex {
         let index = self.last_table_index.next_index();
         self.tables.insert(index, Table::new_temp(index.0));
+        self.last_table_index = index;
         index
     }
 
@@ -161,6 +162,7 @@ impl VirtualMachine {
                 Some(Register::TableRef(t)) => return Ok(Some(self.tables[&t].clone())),
                 Some(Register::Value(v)) => {
                     let mut table = Table::new_temp(self.last_table_index.next_index().0);
+                    self.last_table_index = self.last_table_index.next_index();
                     table.add_column(Column::new("?column?".into(), v.data_type(), vec![], false));
                     table.new_row(vec![v]);
                     return Ok(Some(table));
