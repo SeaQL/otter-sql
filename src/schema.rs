@@ -32,7 +32,6 @@ impl Schema {
         self.tables.push(table);
         self
     }
-
 }
 
 #[cfg(test)]

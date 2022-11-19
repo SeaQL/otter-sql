@@ -8,6 +8,7 @@ use crate::{
     BoundedString,
 };
 
+#[derive(Debug, Clone)]
 /// The intermediate representation of a query.
 pub struct IntermediateCode {
     pub instrs: Vec<Instruction>,

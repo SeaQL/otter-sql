@@ -14,7 +14,7 @@ use crate::ic::{Instruction, IntermediateCode};
 use crate::identifier::{ColumnRef, TableRef};
 use crate::parser::parse;
 use crate::schema::Schema;
-use crate::table::{Row, Table};
+use crate::table::{Row, RowShared, Table};
 use crate::value::Value;
 use crate::{BoundedString, Database};
 
@@ -80,6 +80,15 @@ impl VirtualMachine {
     pub fn new_temp_table(&mut self) -> TableIndex {
         let index = self.last_table_index.next_index();
         self.tables.insert(index, Table::new_temp(index.0));
+        self.last_table_index = index;
+        index
+    }
+
+    /// Creates a new empty table from another table (with the same schema)
+    pub fn new_table_from(&mut self, table: &TableIndex) -> TableIndex {
+        let table = self.tables.get(table).unwrap();
+        let index = self.last_table_index.next_index();
+        self.tables.insert(index, Table::new_from(table));
         self.last_table_index = index;
         index
     }
@@ -172,29 +181,37 @@ impl VirtualMachine {
             Instruction::Filter { index, expr } => match self.registers.get(index) {
                 None => return Err(RuntimeError::EmptyRegister(*index)),
                 Some(Register::TableRef(table_index)) => {
+                    let table_index = *table_index;
                     // TODO: should be safe to unwrap, but make it an error anyway?
-                    let table = self.tables.get(table_index).unwrap();
+                    let table = self.tables.get(&table_index).unwrap();
                     let filtered_data = table
                         .raw_data
                         .iter()
-                        .filter_map(|row| match Expr::execute(expr, table, row) {
-                            Ok(val) => match val {
-                                Value::Bool(b) => {
-                                    if b {
-                                        Some(Ok(row.clone()))
-                                    } else {
-                                        None
+                        .filter_map(|row| {
+                            match Expr::execute(expr, table, RowShared::from_raw(row, &table)) {
+                                Ok(val) => {
+                                    println!("row: {row:?}, value: {val:?}");
+                                    match val {
+                                        Value::Bool(b) => {
+                                            if b {
+                                                Some(Ok(row.clone()))
+                                            } else {
+                                                None
+                                            }
+                                        }
+                                        _ => Some(Err(RuntimeError::FilterWithNonBoolean(
+                                            expr.clone(),
+                                            val.clone(),
+                                        ))),
                                     }
                                 }
-                                _ => Some(Err(RuntimeError::FilterWithNonBoolean(
-                                    expr.clone(),
-                                    val.clone(),
-                                ))),
-                            },
-                            Err(e) => Some(Err(e.into())),
+                                Err(e) => Some(Err(e.into())),
+                            }
                         })
                         .collect::<Result<_, _>>()?;
-                    self.tables.get_mut(table_index).unwrap().raw_data = filtered_data;
+                    let new_table_index = self.new_table_from(&table_index);
+                    self.tables.get_mut(&new_table_index).unwrap().raw_data = filtered_data;
+                    self.insert_register(*index, Register::TableRef(new_table_index));
                 }
                 Some(reg) => return Err(RuntimeError::RegisterNotATable("filter", reg.clone())),
             },
@@ -239,17 +256,21 @@ impl VirtualMachine {
                         for (inp_row, out_row) in
                             inp_table.raw_data.iter().zip(out_table.raw_data.iter_mut())
                         {
-                            let val = Expr::execute(expr, inp_table, inp_row)?;
-                            out_row.data.push(val);
+                            let val = Expr::execute(
+                                expr,
+                                inp_table,
+                                RowShared::from_raw(&inp_row, &inp_table),
+                            )?;
+                            out_row.raw_data.push(val);
                         }
 
                         let data_type = if !out_table.raw_data.is_empty() {
                             let newly_added =
-                                out_table.raw_data.first().unwrap().data.last().unwrap();
+                                out_table.raw_data.first().unwrap().raw_data.last().unwrap();
                             newly_added.data_type()
                         } else {
                             let sentinel = inp_table.sentinel_row()?;
-                            let output_val = Expr::execute(expr, inp_table, &sentinel)?;
+                            let output_val = Expr::execute(expr, inp_table, sentinel.to_shared())?;
                             output_val.data_type()
                         };
 
@@ -295,7 +316,7 @@ impl VirtualMachine {
                 let expr_values = table
                     .raw_data
                     .iter()
-                    .map(|row| Expr::execute(expr, table, row))
+                    .map(|row| Expr::execute(expr, table, RowShared::from_raw(&row, &table)))
                     .collect::<Result<Vec<_>, _>>()?;
                 let mut perm = permutation::sort(expr_values);
                 perm.apply_slice_in_place(&mut table.raw_data);
@@ -516,7 +537,7 @@ impl VirtualMachine {
 
                 let table = self.tables.get(&insert.table).unwrap();
 
-                let value = Expr::execute(expr, table, &table.sentinel_row()?)?;
+                let value = Expr::execute(expr, table, table.sentinel_row()?.to_shared())?;
 
                 if insert.rows[row_index].len() + 1 > table.num_columns() {
                     return Err(RuntimeError::TooManyValuesToInsert(
@@ -891,6 +912,8 @@ mod tests {
         let statement = &parsed[0];
         let ic = codegen(&statement).unwrap();
 
+        println!("ic: {ic:#?}");
+
         vm.execute_ic(&ic)
     }
 
@@ -1019,12 +1042,8 @@ mod tests {
         assert_eq!(
             table.all_data(),
             vec![
-                Row {
-                    data: vec![Value::Int64(2), Value::String("bar".to_owned())]
-                },
-                Row {
-                    data: vec![Value::Int64(3), Value::String("baz".to_owned())]
-                }
+                Row::new(vec![Value::Int64(2), Value::String("bar".to_owned())]),
+                Row::new(vec![Value::Int64(3), Value::String("baz".to_owned())])
             ]
         );
 
@@ -1151,13 +1170,39 @@ mod tests {
         assert_eq!(
             res.all_data(),
             vec![
-                Row {
-                    data: vec![Value::Int64(2), Value::String("bar".to_owned())]
-                },
-                Row {
-                    data: vec![Value::Int64(3), Value::String("baz".to_owned())]
-                }
+                Row::new(vec![Value::Int64(2), Value::String("bar".to_owned())]),
+                Row::new(vec![Value::Int64(3), Value::String("baz".to_owned())])
             ]
+        );
+
+        let res = check_single_statement("SELECT * FROM table1 WHERE col1 = 2", &mut vm)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            res.all_data(),
+            vec![Row::new(vec![
+                Value::Int64(2),
+                Value::String("bar".to_owned())
+            ])]
+        );
+
+        let res = check_single_statement("SELECT * FROM table1 WHERE col1 = 1", &mut vm)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(res.all_data(), vec![]);
+
+        let res = check_single_statement("SELECT * FROM table1 WHERE col1 = 2", &mut vm)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            res.all_data(),
+            vec![Row::new(vec![
+                Value::Int64(2),
+                Value::String("bar".to_owned())
+            ])]
         );
     }
 }

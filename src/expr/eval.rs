@@ -5,12 +5,12 @@ use std::{error::Error, fmt::Display};
 use crate::{
     expr::{BinOp, Expr, UnOp},
     identifier::BoundedString,
-    table::{Row, Table},
+    table::{RowLike, RowShared, Table},
     value::{Value, ValueBinaryOpError, ValueUnaryOpError},
 };
 
 impl Expr {
-    pub fn execute(expr: &Expr, table: &Table, row: &Row) -> Result<Value, ExprExecError> {
+    pub fn execute(expr: &Expr, table: &Table, row: RowShared) -> Result<Value, ExprExecError> {
         match expr {
             Expr::Value(v) => Ok(v.to_owned()),
             Expr::Binary {
@@ -18,7 +18,7 @@ impl Expr {
                 op: BinOp::And,
                 right,
             } => {
-                let left = Expr::execute(left, table, row)?;
+                let left = Expr::execute(left, table, row.clone())?;
                 let right = Expr::execute(right, table, row)?;
 
                 match (&left, &right) {
@@ -34,7 +34,7 @@ impl Expr {
                 op: BinOp::Or,
                 right,
             } => {
-                let left = Expr::execute(left, table, row)?;
+                let left = Expr::execute(left, table, row.clone())?;
                 let right = Expr::execute(right, table, row)?;
 
                 match (&left, &right) {
@@ -46,7 +46,7 @@ impl Expr {
                 }
             }
             Expr::Binary { left, op, right } => {
-                let left = Expr::execute(left, table, row)?;
+                let left = Expr::execute(left, table, row.clone())?;
                 let right = Expr::execute(right, table, row)?;
                 Ok(match op {
                     BinOp::Plus => left + right,
@@ -90,7 +90,7 @@ impl Expr {
                     // and think of how it will work for JOINs and temp tables
                     return Err(ExprExecError::NoSuchColumn(col_ref.col_name));
                 };
-                if let Some(val) = row.data.get(col_index) {
+                if let Some(val) = row.data().get(col_index) {
                     Ok(val.clone())
                 } else {
                     // TODO: show the row here too
@@ -182,7 +182,7 @@ mod test {
     fn exec_expr_no_context(expr: Expr) -> Result<Value, ExprExecError> {
         let mut table = Table::new_temp(0);
         table.new_row(vec![]);
-        Expr::execute(&expr, &table, &table.all_data()[0])
+        Expr::execute(&expr, &table, table.all_data()[0].to_shared())
     }
 
     fn exec_str_no_context(s: &str) -> Result<Value, ExprExecError> {
@@ -192,7 +192,7 @@ mod test {
 
     fn exec_str_with_context(s: &str, table: &Table, row: &Row) -> Result<Value, ExprExecError> {
         let expr = str_to_expr(s);
-        Expr::execute(&expr, table, row)
+        Expr::execute(&expr, table, row.to_shared())
     }
 
     #[test]
@@ -273,7 +273,10 @@ mod test {
     #[test]
     fn exec_arithmetic() {
         assert_eq!(exec_str_no_context("1 + 1"), Ok(Value::Int64(2)));
-        assert_eq!(exec_str_no_context("1.1 + 1.1"), Ok(Value::Float64(2.2.into())));
+        assert_eq!(
+            exec_str_no_context("1.1 + 1.1"),
+            Ok(Value::Float64(2.2.into()))
+        );
 
         // this applies to all binary ops
         assert_eq!(
@@ -287,18 +290,33 @@ mod test {
 
         assert_eq!(exec_str_no_context("4 - 2"), Ok(Value::Int64(2)));
         assert_eq!(exec_str_no_context("4 - 6"), Ok(Value::Int64(-2)));
-        assert_eq!(exec_str_no_context("4.5 - 2.2"), Ok(Value::Float64(2.3.into())));
+        assert_eq!(
+            exec_str_no_context("4.5 - 2.2"),
+            Ok(Value::Float64(2.3.into()))
+        );
 
         assert_eq!(exec_str_no_context("4 * 2"), Ok(Value::Int64(8)));
-        assert_eq!(exec_str_no_context("0.5 * 2.2"), Ok(Value::Float64(1.1.into())));
+        assert_eq!(
+            exec_str_no_context("0.5 * 2.2"),
+            Ok(Value::Float64(1.1.into()))
+        );
 
         assert_eq!(exec_str_no_context("4 / 2"), Ok(Value::Int64(2)));
         assert_eq!(exec_str_no_context("4 / 3"), Ok(Value::Int64(1)));
-        assert_eq!(exec_str_no_context("4.0 / 2.0"), Ok(Value::Float64(2.0.into())));
-        assert_eq!(exec_str_no_context("5.1 / 2.5"), Ok(Value::Float64(2.04.into())));
+        assert_eq!(
+            exec_str_no_context("4.0 / 2.0"),
+            Ok(Value::Float64(2.0.into()))
+        );
+        assert_eq!(
+            exec_str_no_context("5.1 / 2.5"),
+            Ok(Value::Float64(2.04.into()))
+        );
 
         assert_eq!(exec_str_no_context("5 % 2"), Ok(Value::Int64(1)));
-        assert_eq!(exec_str_no_context("5.5 % 2.5"), Ok(Value::Float64(0.5.into())));
+        assert_eq!(
+            exec_str_no_context("5.5 % 2.5"),
+            Ok(Value::Float64(0.5.into()))
+        );
     }
 
     #[test]
@@ -424,13 +442,11 @@ mod test {
 
         assert_eq!(
             table.all_data(),
-            vec![Row {
-                data: vec![
-                    Value::Int64(4),
-                    Value::Int64(10),
-                    Value::String("brr".to_owned())
-                ]
-            }]
+            vec![Row::new(vec![
+                Value::Int64(4),
+                Value::Int64(10),
+                Value::String("brr".to_owned())
+            ])]
         );
 
         assert_eq!(
