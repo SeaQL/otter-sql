@@ -253,15 +253,26 @@ impl VirtualMachine {
                             )?;
                         }
                     } else {
-                        for (inp_row, out_row) in
-                            inp_table.raw_data.iter().zip(out_table.raw_data.iter_mut())
-                        {
-                            let val = Expr::execute(
-                                expr,
-                                inp_table,
-                                RowShared::from_raw(&inp_row, &inp_table),
-                            )?;
-                            out_row.raw_data.push(val);
+                        if inp_table.raw_data.len() == out_table.raw_data.len() {
+                            for (inp_row, out_row) in
+                                inp_table.raw_data.iter().zip(out_table.raw_data.iter_mut())
+                            {
+                                let val = Expr::execute(
+                                    expr,
+                                    inp_table,
+                                    RowShared::from_raw(&inp_row, &inp_table),
+                                )?;
+                                out_row.raw_data.push(val);
+                            }
+                        } else {
+                            for inp_row in inp_table.raw_data.iter() {
+                                let val = Expr::execute(
+                                    expr,
+                                    inp_table,
+                                    RowShared::from_raw(&inp_row, &inp_table),
+                                )?;
+                                out_table.new_row(vec![val]);
+                            }
                         }
 
                         let data_type = if !out_table.raw_data.is_empty() {
@@ -1178,7 +1189,6 @@ mod tests {
         let res = check_single_statement("SELECT * FROM table1 WHERE col1 = 2", &mut vm)
             .unwrap()
             .unwrap();
-
         assert_eq!(
             res.all_data(),
             vec![Row::new(vec![
@@ -1190,19 +1200,51 @@ mod tests {
         let res = check_single_statement("SELECT * FROM table1 WHERE col1 = 1", &mut vm)
             .unwrap()
             .unwrap();
-
         assert_eq!(res.all_data(), vec![]);
 
         let res = check_single_statement("SELECT * FROM table1 WHERE col1 = 2", &mut vm)
             .unwrap()
             .unwrap();
-
         assert_eq!(
             res.all_data(),
             vec![Row::new(vec![
                 Value::Int64(2),
                 Value::String("bar".to_owned())
             ])]
+        );
+
+        let res =
+            check_single_statement("SELECT * FROM table1 WHERE col1 = 2 or col1 = 3", &mut vm)
+                .unwrap()
+                .unwrap();
+        assert_eq!(
+            res.all_data(),
+            vec![
+                Row::new(vec![Value::Int64(2), Value::String("bar".to_owned())]),
+                Row::new(vec![Value::Int64(3), Value::String("baz".to_owned())])
+            ]
+        );
+
+        let res = check_single_statement("SELECT col1 FROM table1", &mut vm)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            res.all_data(),
+            vec![
+                Row::new(vec![Value::Int64(2)]),
+                Row::new(vec![Value::Int64(3)])
+            ]
+        );
+
+        let res = check_single_statement("SELECT col1, col2 FROM table1", &mut vm)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            res.all_data(),
+            vec![
+                Row::new(vec![Value::Int64(2), Value::String("bar".to_owned())]),
+                Row::new(vec![Value::Int64(3), Value::String("baz".to_owned())])
+            ]
         );
     }
 }
