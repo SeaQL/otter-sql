@@ -573,20 +573,22 @@ impl VirtualMachine {
 
                 let table = self.tables.get_mut(&insert.table).unwrap();
 
-                if insert.columns.is_empty() {
-                    for row in insert.rows {
-                        if table.num_columns() != row.len() {
-                            return Err(RuntimeError::NotEnoughValuesToInsert(
-                                *table.name(),
-                                row.len(),
-                                table.num_columns(),
-                            ));
-                        }
-                        table.new_row(row);
+                if !insert.columns.is_empty() && (insert.columns.len() != table.num_columns()) {
+                    return Err(RuntimeError::Unsupported(concat!(
+                        "Default values are not supported yet. ",
+                        "Some columns were missing in INSERT."
+                    )));
+                }
+
+                for row in insert.rows {
+                    if table.num_columns() != row.len() {
+                        return Err(RuntimeError::NotEnoughValuesToInsert(
+                            *table.name(),
+                            row.len(),
+                            table.num_columns(),
+                        ));
                     }
-                } else {
-                    // TODO: fill missing values with sentinel?
-                    todo!()
+                    table.new_row(row);
                 }
             }
             Instruction::Update { index, col, expr } => todo!(),
@@ -790,6 +792,7 @@ pub enum RuntimeError {
     ExprExecError(ExprExecError),
     TooManyValuesToInsert(BoundedString, usize, usize),
     NotEnoughValuesToInsert(BoundedString, usize, usize),
+    Unsupported(&'static str),
 }
 
 impl From<ExprExecError> for RuntimeError {
@@ -889,6 +892,7 @@ impl Display for RuntimeError {
                 ),
                 table_name, got_num, expected_num
             ),
+            Self::Unsupported(err) => write!(f, "{}", err,),
         }
     }
 }
@@ -1085,16 +1089,46 @@ mod tests {
             RuntimeError::NotEnoughValuesToInsert("table1".into(), 1, 2)
         );
 
-        // TODO: test this once implemented
-        // let _res = check_single_statement(
-        //     "
-        //     INSERT INTO table1 (col1, col2) VALUES
-        //         (2, 'bar'),
-        //         (3, 'aaa')
-        //     ",
-        //     &mut vm,
-        // )
-        // .unwrap();
+        let _res = check_single_statement(
+            "
+            INSERT INTO table1 (col1, col2) VALUES
+                (4, 'car'),
+                (5, 'yak')
+            ",
+            &mut vm,
+        )
+        .unwrap();
+
+        let table_index = vm
+            .find_table(
+                vm.database.default_schema(),
+                &TableRef {
+                    schema_name: None,
+                    table_name: "table1".into(),
+                },
+            )
+            .unwrap();
+
+        let table = vm.table(&table_index).unwrap();
+
+        assert_eq!(
+            table.all_data(),
+            vec![
+                Row::new(vec![Value::Int64(2), Value::String("bar".to_owned())]),
+                Row::new(vec![Value::Int64(3), Value::String("aaa".to_owned())]),
+                Row::new(vec![Value::Int64(4), Value::String("car".to_owned())]),
+                Row::new(vec![Value::Int64(5), Value::String("yak".to_owned())]),
+            ]
+        );
+
+        let res = check_single_statement(
+            "
+            INSERT INTO table1 (col2) VALUES
+                ('bar')
+            ",
+            &mut vm,
+        );
+        matches!(res.unwrap_err(), RuntimeError::Unsupported(_));
     }
 
     #[test]
@@ -1296,9 +1330,10 @@ mod tests {
             .unwrap();
         assert_eq!(
             res.all_data(),
-            vec![
-                Row::new(vec![Value::Int64(2), Value::String("bar".to_owned())]),
-            ]
+            vec![Row::new(vec![
+                Value::Int64(2),
+                Value::String("bar".to_owned())
+            ]),]
         );
     }
 }
