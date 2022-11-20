@@ -1032,7 +1032,7 @@ mod tests {
             "
             INSERT INTO table1 VALUES
                 (2, 'bar'),
-                (3, 'baz')
+                (3, 'aaa')
             ",
             &mut vm,
         )
@@ -1054,7 +1054,7 @@ mod tests {
             table.all_data(),
             vec![
                 Row::new(vec![Value::Int64(2), Value::String("bar".to_owned())]),
-                Row::new(vec![Value::Int64(3), Value::String("baz".to_owned())])
+                Row::new(vec![Value::Int64(3), Value::String("aaa".to_owned())])
             ]
         );
 
@@ -1090,7 +1090,7 @@ mod tests {
         //     "
         //     INSERT INTO table1 (col1, col2) VALUES
         //         (2, 'bar'),
-        //         (3, 'baz')
+        //         (3, 'aaa')
         //     ",
         //     &mut vm,
         // )
@@ -1138,7 +1138,7 @@ mod tests {
             "
             INSERT INTO table1 VALUES
                 (2, 'bar'),
-                (3, 'baz')
+                (3, 'aaa')
             ",
             &mut vm,
         )
@@ -1182,7 +1182,7 @@ mod tests {
             res.all_data(),
             vec![
                 Row::new(vec![Value::Int64(2), Value::String("bar".to_owned())]),
-                Row::new(vec![Value::Int64(3), Value::String("baz".to_owned())])
+                Row::new(vec![Value::Int64(3), Value::String("aaa".to_owned())])
             ]
         );
 
@@ -1221,7 +1221,7 @@ mod tests {
             res.all_data(),
             vec![
                 Row::new(vec![Value::Int64(2), Value::String("bar".to_owned())]),
-                Row::new(vec![Value::Int64(3), Value::String("baz".to_owned())])
+                Row::new(vec![Value::Int64(3), Value::String("aaa".to_owned())])
             ]
         );
 
@@ -1243,7 +1243,61 @@ mod tests {
             res.all_data(),
             vec![
                 Row::new(vec![Value::Int64(2), Value::String("bar".to_owned())]),
-                Row::new(vec![Value::Int64(3), Value::String("baz".to_owned())])
+                Row::new(vec![Value::Int64(3), Value::String("aaa".to_owned())])
+            ]
+        );
+
+        let res = check_single_statement("SELECT * FROM table1 ORDER BY col1", &mut vm)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            res.all_data(),
+            vec![
+                Row::new(vec![Value::Int64(2), Value::String("bar".to_owned())]),
+                Row::new(vec![Value::Int64(3), Value::String("aaa".to_owned())])
+            ]
+        );
+
+        let res = check_single_statement("SELECT * FROM table1 ORDER BY col2", &mut vm)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            res.all_data(),
+            vec![
+                Row::new(vec![Value::Int64(3), Value::String("aaa".to_owned())]),
+                Row::new(vec![Value::Int64(2), Value::String("bar".to_owned())]),
+            ]
+        );
+
+        let res = check_single_statement("SELECT * FROM table1 ORDER BY col1 DESC", &mut vm)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            res.all_data(),
+            vec![
+                Row::new(vec![Value::Int64(3), Value::String("aaa".to_owned())]),
+                Row::new(vec![Value::Int64(2), Value::String("bar".to_owned())]),
+            ]
+        );
+
+        let res = check_single_statement("SELECT * FROM table1 ORDER BY col2 DESC", &mut vm)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            res.all_data(),
+            vec![
+                Row::new(vec![Value::Int64(2), Value::String("bar".to_owned())]),
+                Row::new(vec![Value::Int64(3), Value::String("aaa".to_owned())]),
+            ]
+        );
+
+        let res = check_single_statement("SELECT * FROM table1 ORDER BY col1 LIMIT 1", &mut vm)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            res.all_data(),
+            vec![
+                Row::new(vec![Value::Int64(2), Value::String("bar".to_owned())]),
             ]
         );
     }
