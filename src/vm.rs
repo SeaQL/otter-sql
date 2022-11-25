@@ -904,7 +904,8 @@ mod tests {
     use crate::{
         codegen::codegen,
         column::Column,
-        identifier::TableRef,
+        expr::{eval::ExprExecError, BinOp, Expr},
+        identifier::{ColumnRef, TableRef},
         parser::parse,
         table::{Row, Table},
         value::Value,
@@ -1334,6 +1335,50 @@ mod tests {
                 Value::Int64(2),
                 Value::String("bar".to_owned())
             ]),]
+        );
+
+        let res = check_single_statement("SELECT col3 FROM table1", &mut vm);
+        assert_eq!(
+            res.unwrap_err(),
+            RuntimeError::ExprExecError(ExprExecError::NoSuchColumn("col3".into()))
+        );
+
+        let res = check_single_statement("SELECT col1 FROM table2", &mut vm);
+        assert_eq!(
+            res.unwrap_err(),
+            RuntimeError::TableNotFound(TableRef {
+                schema_name: None,
+                table_name: "table2".into()
+            })
+        );
+
+        let res = check_single_statement("SELECT col1 FROM table1 ORDER BY col3", &mut vm);
+        assert_eq!(
+            res.unwrap_err(),
+            RuntimeError::ExprExecError(ExprExecError::NoSuchColumn("col3".into()))
+        );
+
+        let res = check_single_statement("SELECT col1 FROM table1 WHERE col3 = 1", &mut vm);
+        assert_eq!(
+            res.unwrap_err(),
+            RuntimeError::ExprExecError(ExprExecError::NoSuchColumn("col3".into()))
+        );
+
+        let res = check_single_statement("SELECT col1 FROM table1 WHERE col1 + 1", &mut vm);
+        assert_eq!(
+            res.unwrap_err(),
+            RuntimeError::FilterWithNonBoolean(
+                Expr::Binary {
+                    left: Box::new(Expr::ColumnRef(ColumnRef {
+                        schema_name: None,
+                        table_name: None,
+                        col_name: "col1".into()
+                    })),
+                    op: BinOp::Plus,
+                    right: Box::new(Expr::Value(Value::Int64(1)))
+                },
+                Value::Int64(3)
+            )
         );
     }
 }
