@@ -206,7 +206,7 @@ pub fn codegen(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                                 }
                             }
                         }
-                        &[] => instrs.push(Instruction::Empty {
+                        &[] => instrs.push(Instruction::NonExistent {
                             index: table_reg_index,
                         }),
                         _ => {
@@ -707,7 +707,7 @@ mod tests {
             assert_eq!(
                 instrs,
                 &[
-                    Instruction::Empty {
+                    Instruction::NonExistent {
                         index: RegisterIndex::default()
                     },
                     Instruction::Empty {

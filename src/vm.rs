@@ -166,6 +166,9 @@ impl VirtualMachine {
                 self.registers
                     .insert(*index, Register::TableRef(table_index));
             }
+            Instruction::NonExistent { index } => {
+                self.registers.insert(*index, Register::NonExistentTable);
+            }
             Instruction::Return { index } => match self.registers.remove(index) {
                 None => return Err(RuntimeError::EmptyRegister(*index)),
                 Some(Register::TableRef(t)) => return Ok(Some(self.tables[&t].clone())),
@@ -223,6 +226,25 @@ impl VirtualMachine {
             } => match (self.registers.get(input), self.registers.get(output)) {
                 (None, _) => return Err(RuntimeError::EmptyRegister(*input)),
                 (_, None) => return Err(RuntimeError::EmptyRegister(*output)),
+                (Some(Register::NonExistentTable), Some(Register::TableRef(out_table_index))) => {
+                    let out_table = self.tables.get_mut(out_table_index).unwrap();
+                    // we assume out table is empty at this point, so use it like an input table
+                    // because why not.
+                    let val =
+                        Expr::execute(expr, &out_table, out_table.sentinel_row()?.to_shared())?;
+                    let data_type = val.data_type();
+                    out_table.new_row(vec![val]);
+
+                    // TODO: provide a unique name here
+                    let new_col = Column::new(
+                        alias.unwrap_or("PLACEHOLDER".into()),
+                        data_type,
+                        vec![],
+                        false,
+                    );
+
+                    out_table.add_column(new_col);
+                }
                 (
                     Some(Register::TableRef(inp_table_index)),
                     Some(Register::TableRef(out_table_index)),
@@ -663,6 +685,8 @@ impl Default for VirtualMachine {
 pub enum Register {
     /// A reference to a table.
     TableRef(TableIndex),
+    /// A reference to a non-existent table.
+    NonExistentTable,
     /// A grouped table.
     GroupedTable {
         grouped_col: Column,
@@ -1150,12 +1174,21 @@ mod tests {
             ),]
         );
 
-        // assert_eq!(
-        //     res.all_data(),
-        //     vec![Row {
-        //         data: vec![Value::Int64(1)]
-        //     }]
-        // );
+        assert_eq!(res.all_data(), vec![Row::new(vec![Value::Int64(1)])]);
+        assert_eq!(
+            check_single_statement("SELECT 10 * 20 + 5", &mut vm)
+                .unwrap()
+                .unwrap()
+                .all_data(),
+            vec![Row::new(vec![Value::Int64(205)])]
+        );
+        assert_eq!(
+            check_single_statement("SELECT 'a'", &mut vm)
+                .unwrap()
+                .unwrap()
+                .all_data(),
+            vec![Row::new(vec![Value::String("a".to_owned())])]
+        );
 
         check_single_statement(
             "

@@ -36,6 +36,10 @@ pub enum Instruction {
     /// Create a new empty [`Register::TableRef](`crate::vm::Register::TableRef).
     Empty { index: RegisterIndex },
 
+    /// Create a new [`Register::TableRef](`crate::vm::Register::TableRef) pointing to a
+    /// non-existent table.
+    NonExistent { index: RegisterIndex },
+
     /// Filter the [`Register::TableRef](`crate::vm::Register::TableRef) at `index` using the given expression.
     ///
     /// This represents a `WHERE` clause of a `SELECT` statement in SQL.
