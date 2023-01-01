@@ -5,7 +5,7 @@
 
 To SeaQL.org, Inc. ("the Org")
 
-Project: SqlAssembly - An embeddable SQL Interpreter (the "Project")
+Project: OtterSql - An embeddable SQL Interpreter (the "Project")
 
 Period: Jun 13, 2022 to Dec 31, 2022 (the "Project Period")
 
