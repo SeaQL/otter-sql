@@ -59,6 +59,21 @@ impl TryFrom<Vec<Ident>> for TableRef {
     }
 }
 
+impl Display for TableRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self {
+                schema_name: None,
+                table_name,
+            } => write!(f, "{}", table_name),
+            Self {
+                schema_name: Some(schema_name),
+                table_name,
+            } => write!(f, "{}.{}", schema_name, table_name),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ColumnRef {
     pub schema_name: Option<BoundedString>,

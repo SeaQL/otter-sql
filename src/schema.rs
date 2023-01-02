@@ -3,6 +3,7 @@ use crate::{vm::TableIndex, BoundedString};
 /// A namespace in a database.
 ///
 /// The schema only holds a reference to the actual tables, which are owned by the VM.
+#[derive(Debug)]
 pub struct Schema {
     name: BoundedString,
     tables: Vec<TableIndex>,

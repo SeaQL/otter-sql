@@ -8,6 +8,7 @@ use crate::{
     BoundedString,
 };
 
+#[derive(Debug, Clone)]
 /// The intermediate representation of a query.
 pub struct IntermediateCode {
     pub instrs: Vec<Instruction>,
@@ -32,18 +33,12 @@ pub enum Instruction {
         name: TableRef,
     },
 
-    /// Load an *existing* table given by `name` from the schema `schema_name`.
-    ///
-    /// This will result in a [`Register::TableRef](`crate::vm::Register::TableRef) being stored at the
-    /// given register.
-    SourceFromSchema {
-        index: RegisterIndex,
-        schema_name: SchemaRef,
-        name: BoundedString,
-    },
-
     /// Create a new empty [`Register::TableRef](`crate::vm::Register::TableRef).
     Empty { index: RegisterIndex },
+
+    /// Create a new [`Register::TableRef](`crate::vm::Register::TableRef) pointing to a
+    /// non-existent table.
+    NonExistent { index: RegisterIndex },
 
     /// Filter the [`Register::TableRef](`crate::vm::Register::TableRef) at `index` using the given expression.
     ///

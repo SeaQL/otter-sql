@@ -27,18 +27,27 @@ impl Column {
         }
     }
 
+    /// Name of the column.
     pub fn name(&self) -> &BoundedString {
         &self.name
     }
 
+    /// Data type of the column.
     pub fn data_type(&self) -> &DataType {
         &self.data_type
     }
 
+    /// Column's options (attributes, constraints, etc.).
     pub fn options(&self) -> &Vec<ColumnOptionDef> {
         &self.options
     }
 
+    /// Add a new column option.
+    pub fn add_column_option(&mut self, option: ColumnOptionDef) {
+        self.options.push(option)
+    }
+
+    /// Whether the column is a hidden, internal-only column.
     pub fn is_internal(&self) -> bool {
         self.internal
     }

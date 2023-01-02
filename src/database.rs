@@ -12,6 +12,7 @@ impl Database {
     pub fn new(name: BoundedString) -> Self {
         Self {
             name,
+            // the default schema needs to be the first
             schemas: vec![Schema::new(DEFAULT_SCHEMA_NAME.into())],
         }
     }
@@ -30,6 +31,26 @@ impl Database {
     /// All the schemas in the database.
     pub fn schemas(&self) -> &Vec<Schema> {
         &self.schemas
+    }
+
+    /// The default schema.
+    pub fn default_schema(&self) -> &Schema {
+        // ensure that the default schema is always the first
+        &self.schemas[0]
+    }
+
+    /// Mutable reference to the default schema.
+    pub fn default_schema_mut(&mut self) -> &mut Schema {
+        // ensure that the default schema is always the first
+        &mut self.schemas[0]
+    }
+
+    pub fn schema_by_name(&self, name: &BoundedString) -> Option<&Schema> {
+        self.schemas().iter().find(|s| s.name() == name)
+    }
+
+    pub fn schema_by_name_mut(&mut self, name: &BoundedString) -> Option<&mut Schema> {
+        self.schemas.iter_mut().find(|s| s.name() == name)
     }
 }
 

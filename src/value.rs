@@ -3,14 +3,18 @@ use std::{
     ops::{Add, Div, Mul, Neg, Not, Rem, Sub},
 };
 
-use sqlparser::ast;
+use ordered_float::OrderedFloat;
+use sqlparser::ast::{self, DataType};
 
-use crate::expr::{BinOp, UnOp};
+use crate::{
+    expr::{BinOp, UnOp},
+    vm::RuntimeError,
+};
 
 /// A value contained within a table's cell.
 ///
 /// One or more column types may be mapped to a single variant of [`Value`].
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Eq, Ord)]
 pub enum Value {
     Null,
 
@@ -27,7 +31,7 @@ pub enum Value {
     // reference: https://dev.mysql.com/doc/refman/8.0/en/floating-point-types.html
     // note: specifying exact precision and digits is not supported yet
     // TODO: Float32
-    Float64(f64),
+    Float64(OrderedFloat<f64>),
 
     // TODO: date and timestamp
 
@@ -56,7 +60,7 @@ impl Value {
         match self {
             Value::Bool(lhs) => Ok(Value::Bool(lhs)),
             _ => Err(ValueUnaryOpError {
-                operator: UnOp::Not,
+                operator: UnOp::IsTrue,
                 value: self,
             }),
         }
@@ -66,7 +70,7 @@ impl Value {
         match self {
             Value::Bool(lhs) => Ok(Value::Bool(!lhs)),
             _ => Err(ValueUnaryOpError {
-                operator: UnOp::Not,
+                operator: UnOp::IsFalse,
                 value: self,
             }),
         }
@@ -109,6 +113,31 @@ impl Value {
             }),
         }
     }
+
+    /// Type of data this value is
+    pub fn data_type(&self) -> DataType {
+        match self {
+            Self::Null => DataType::Int(None),
+            Self::Bool(_) => DataType::Boolean,
+            Self::Int64(_) => DataType::Int(None),
+            Self::Float64(_) => DataType::Float(None),
+            Self::String(_) => DataType::String,
+            Self::Binary(_) => DataType::Bytea,
+        }
+    }
+
+    /// Create a new sentinel value of given type.
+    pub(crate) fn sentinel_value(data_type: &DataType) -> Result<Self, RuntimeError> {
+        Ok(match data_type {
+            DataType::Boolean => Self::Bool(false),
+            DataType::Int(_) => Self::Int64(0),
+            DataType::UnsignedInt(_) => Self::Int64(0),
+            DataType::Float(_) => Self::Float64(0.0.into()),
+            DataType::String => Self::String("".to_owned()),
+            DataType::Bytea => Self::Binary(vec![]),
+            _ => return Err(RuntimeError::UnsupportedType(data_type.clone())),
+        })
+    }
 }
 
 impl TryFrom<ast::Value> for Value {
@@ -125,7 +154,7 @@ impl TryFrom<ast::Value> for Value {
                     Ok(Value::Int64(int))
                 } else {
                     if let Ok(float) = s.parse::<f64>() {
-                        Ok(Value::Float64(float))
+                        Ok(Value::Float64(float.into()))
                     } else {
                         Err(ValueError {
                             reason: "Unsupported number format",
@@ -393,12 +422,12 @@ mod tests {
 
         assert_eq!(
             Value::try_from(ast::Value::Number("1000.0".to_owned(), false)),
-            Ok(Value::Float64(1000.0))
+            Ok(Value::Float64(1000.0.into()))
         );
 
         assert_eq!(
             Value::try_from(ast::Value::Number("0.300000000000000004".to_owned(), false)),
-            Ok(Value::Float64(0.300000000000000004))
+            Ok(Value::Float64(0.300000000000000004.into()))
         );
 
         assert_eq!(
