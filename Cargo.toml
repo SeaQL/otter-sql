@@ -8,10 +8,8 @@ description = "🦦 An Embeddable SQL Executor"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/otter-sql"
 repository = "https://github.com/SeaQL/otter-sql"
-keywords = ["mysql", "postgres", "sqlite"]
+keywords = ["sql", "mysql", "sqlite"]
 categories = ["database"]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 arraystring = "0.3.0"

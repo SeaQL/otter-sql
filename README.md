@@ -1,6 +1,5 @@
 <div align="center">
-  <!-- https://raw.githubusercontent.com/SeaQL/otter-sql/main -->
-  <img src="./assets/SeaQL logo dual.png" width="320"/>
+  <img src="https://raw.githubusercontent.com/SeaQL/otter-sql/main/assets/SeaQL logo dual.png" width="320"/>
 
   <h1>OtterSQL</h1>
 
@@ -11,7 +10,7 @@
   [![github workflow badge](https://github.com/SeaQL/otter-sql/actions/workflows/rust.yml/badge.svg)](https://github.com/SeaQL/otter-sql/actions/workflows/rust.yml)
 </div>
 
-OtterSQL implements a generic intermediate code (IC) with an **instruction set** for tabular data operations. This IC can be used to make in-memory mocks of larger databases such as MySQL and PostgreSQL. This IC is executed by the **OtterSQL VM**. This project also provides a frontend that compiles a generic dialect of SQL to the IC.
+OtterSQL implements a generic intermediate code (IC) with an **instruction set** for tabular data operations. This IC can be used to make in-memory mocks of larger databases such as MySQL and SQLite. This IC is executed by the **OtterSQL VM**. This project also provides a frontend that compiles a generic dialect of SQL to the IC.
 
 The primary goal for this project is to facilitate developers in testing their SQL-backed applications. The long term goal is to have an embeddable SQL VM for use in client-side applications.
 
@@ -58,4 +57,4 @@ Unless you explicitly state otherwise, any contribution intentionally submitted 
 
 Meet the official mascot of OtterSQL. He is a book worm.
 
-<img width="400" src="./assets/OtterSQL.png"/>
+<img width="400" src="https://raw.githubusercontent.com/SeaQL/otter-sql/main/assets/OtterSQL.png"/>

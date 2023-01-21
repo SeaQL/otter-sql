@@ -1,13 +1,18 @@
-**OtterSQL** is an embedded SQL executor made for use in tests.
+<div align="center">
+  <img src="https://raw.githubusercontent.com/SeaQL/otter-sql/main/assets/SeaQL logo dual.png" width="320"/>
+
+  <h1>OtterSQL</h1>
+
+  <h3>🦦 An Embeddable SQL Executor in Rust</h3>
+
+</div>
 
 See [README](https://github.com/SeaQL/otter-sql#readme) for more details.
 
 This crate documentation describes the public API of OtterSQL. See above if you only want to
 use the CLI.
 
-## Use as a library
-
-### Installation
+## Installation
 
 Add the following to your `Cargo.toml`
 
@@ -15,7 +20,7 @@ Add the following to your `Cargo.toml`
 otter-sql = "0.1"
 ```
 
-### Getting started
+## Getting started
 
 ```rust
 use otter_sql::VirtualMachine;
