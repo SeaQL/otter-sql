@@ -1,6 +1,6 @@
 [package]
 name = "otter-sql"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 rust-version = "1.60"
 authors = ["Samyak Sarnayak <samyak201@gmail.com>"]
@@ -10,6 +10,10 @@ documentation = "https://docs.rs/otter-sql"
 repository = "https://github.com/SeaQL/otter-sql"
 keywords = ["sql", "mysql", "sqlite"]
 categories = ["database"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 arraystring = "0.3.0"

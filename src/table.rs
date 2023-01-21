@@ -208,6 +208,7 @@ impl Table {
 }
 
 #[cfg(feature = "terminal-output")]
+#[cfg_attr(docsrs, doc(cfg(feature = "terminal-output")))]
 impl std::fmt::Display for Table {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use tabled::{builder::Builder, Style};

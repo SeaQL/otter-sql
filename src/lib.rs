@@ -1,6 +1,7 @@
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc = include_str!("cargo_docs.md")]
 #![doc(
-    html_logo_url = "https://raw.githubusercontent.com/SeaQL/otter-sql/main/assets/SeaQL logo dual.png"
+    html_logo_url = "https://raw.githubusercontent.com/SeaQL/sea-query/master/docs/SeaQL icon dark.png"
 )]
 
 pub mod codegen;
