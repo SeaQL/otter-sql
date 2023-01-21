@@ -1,4 +1,7 @@
 #![doc = include_str!("cargo_docs.md")]
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/SeaQL/otter-sql/main/assets/SeaQL logo dual.png"
+)]
 
 pub mod codegen;
 pub mod column;

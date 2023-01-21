@@ -55,6 +55,6 @@ Unless you explicitly state otherwise, any contribution intentionally submitted 
 
 ## Mascot
 
-Meet the official mascot of OtterSQL. He is a book worm.
+Meet the official mascot of OtterSQL. He lives in the sea and loves reading books.
 
 <img width="400" src="https://raw.githubusercontent.com/SeaQL/otter-sql/main/assets/OtterSQL.png"/>
