@@ -2,7 +2,7 @@
 
 See [README](https://github.com/SeaQL/otter-sql#readme) for more details.
 
-This crate documentation describes the external API of OtterSQL. See above if you only want to
+This crate documentation describes the public API of OtterSQL. See above if you only want to
 use the CLI.
 
 ## Use as a library

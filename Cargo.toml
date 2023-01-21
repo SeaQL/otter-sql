@@ -2,6 +2,14 @@
 name = "otter-sql"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.60"
+authors = ["Samyak Sarnayak <samyak201@gmail.com>"]
+description = "🦦 An Embeddable SQL Executor"
+license = "MIT OR Apache-2.0"
+documentation = "https://docs.rs/otter-sql"
+repository = "https://github.com/SeaQL/otter-sql"
+keywords = ["mysql", "postgres", "sqlite"]
+categories = ["database"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
