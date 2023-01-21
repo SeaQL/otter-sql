@@ -207,6 +207,27 @@ impl Table {
     }
 }
 
+#[cfg(feature = "terminal-output")]
+impl std::fmt::Display for Table {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use tabled::{builder::Builder, Style};
+
+        let mut builder = Builder::default();
+
+        for row in self.all_data() {
+            builder.add_record(row.data().into_iter().map(|v| v.to_string()));
+        }
+
+        builder.set_columns(self.columns().map(|c| c.name().to_string()));
+
+        let mut table = builder.build();
+
+        table.with(Style::rounded());
+
+        write!(f, "{}", table)
+    }
+}
+
 /// Trait to retrieve data from something that looks like a row in a table.
 pub trait RowLike {
     /// Copy or move of the data contained in the row.

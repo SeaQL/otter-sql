@@ -47,6 +47,16 @@ fn main() {
     // two unwraps because this returns a `Result<Option<Table>, ...>`.
     let res = vm.execute("SELECT * FROM table1").unwrap().unwrap();
 
-    println!("Result: {}", res);
+    println!("{}", res);
 }
+```
+
+Output:
+```text
+╭──────┬──────╮
+│ col1 │ col2 │
+├──────┼──────┤
+│ 2    │ bar  │
+│ 3    │ aaa  │
+╰──────┴──────╯
 ```
