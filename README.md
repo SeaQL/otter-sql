@@ -1,5 +1,5 @@
 <div align="center">
-  <img height="400" src="./assets/OtterSql.jpg"/>
+  <img src="./assets/SeaQL logo dual.png" width="320"/>
 
   <h1>OtterSql</h1>
 
@@ -10,13 +10,15 @@
   [![github workflow badge](https://github.com/SeaQL/otter-sql/actions/workflows/rust.yml/badge.svg)](https://github.com/SeaQL/otter-sql/actions/workflows/rust.yml)
 </div>
 
-An in-memory database made for use in tests.
+<!-- https://raw.githubusercontent.com/SeaQL/otter-sql/main -->
 
-OtterSql implements a generic intermediate code (IC) with an **instruction set** for tabular data operations. This IC can be used to make in-memory mocks of larger databases such as PostgreSQL and MySQL. This IC is executed by the **OtterSql VM**. This project also provides a frontend that compiles a generic dialect of SQL to the IC.
+<img width="400" src="./assets/OtterSql.jpg"/>
+
+OtterSql implements a generic intermediate code (IC) with an **instruction set** for tabular data operations. This IC can be used to make in-memory mocks of larger databases such as MySQL and PostgreSQL. This IC is executed by the **OtterSql VM**. This project also provides a frontend that compiles a generic dialect of SQL to the IC.
 
 The primary goal for this project is to facilitate developers in *testing* their SQL-backed applications.
 
-Non-goals (for now): performance, multi-threading, thread safety, ACID compliance.
+Non-goals (for now): performance, concurrency, persistence, ACID compliance.
 
 ## FAQ
 
@@ -50,4 +52,3 @@ See [**the crate documentation**](https://docs.rs/otter-sql/latest).
 
 - [ ] PostgreSQL codegen (frontend)
 - [ ] MySQL codegen (frontend)
-
