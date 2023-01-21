@@ -9,7 +9,7 @@ use std::fmt::Display;
 
 use sqlparser::parser::ParserError;
 
-use crate::codegen::{codegen, CodegenError};
+use crate::codegen::{codegen_ast, CodegenError};
 use crate::column::Column;
 use crate::expr::eval::ExprExecError;
 use crate::expr::Expr;
@@ -114,7 +114,7 @@ impl VirtualMachine {
         let ast = parse(code)?;
         let mut ret = None;
         for stmt in ast {
-            let ic = codegen(&stmt)?;
+            let ic = codegen_ast(&stmt)?;
             ret = self.execute_ic(&ic)?;
         }
         Ok(ret)
@@ -937,7 +937,7 @@ mod tests {
     use sqlparser::ast::{ColumnOption, ColumnOptionDef, DataType};
 
     use crate::{
-        codegen::codegen,
+        codegen::codegen_ast,
         column::Column,
         expr::{eval::ExprExecError, BinOp, Expr},
         identifier::{ColumnRef, TableRef},
@@ -961,7 +961,7 @@ mod tests {
         assert_eq!(parsed.len(), 1);
 
         let statement = &parsed[0];
-        let ic = codegen(&statement).unwrap();
+        let ic = codegen_ast(&statement).unwrap();
 
         println!("ic: {ic:#?}");
 

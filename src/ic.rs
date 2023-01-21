@@ -1,5 +1,7 @@
 //! Intermediate representation (IR) and instruction set for an SQL database.
 
+use fmt_derive::{Debug, Display};
+
 use sqlparser::ast::{ColumnOptionDef, DataType};
 
 use crate::{
@@ -13,11 +15,11 @@ use crate::{
 #[derive(Debug, Clone)]
 /// The intermediate representation of a query. Made of up [`Instruction`]s.
 pub struct IntermediateCode {
-    pub instrs: Vec<Instruction>
+    pub instrs: Vec<Instruction>,
 }
 
 /// The instruction set of OtterSql.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Display, Debug, Clone, PartialEq)]
 pub enum Instruction {
     /// Load a [`Value`] into a register.
     Value { index: RegisterIndex, value: Value },
@@ -56,6 +58,7 @@ pub enum Instruction {
         input: RegisterIndex,
         output: RegisterIndex,
         expr: Expr,
+        #[display("{:?}", alias)]
         alias: Option<BoundedString>,
     },
 

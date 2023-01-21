@@ -6,7 +6,7 @@ pub mod database;
 pub mod expr;
 pub mod ic;
 pub mod identifier;
-mod parser;
+pub mod parser;
 pub mod schema;
 pub mod table;
 pub mod value;
