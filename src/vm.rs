@@ -1,3 +1,6 @@
+//! The executor virtual machine, its registers and errors.
+//!
+//! See [`VirtualMachine`] and [`Register`].
 use hashbrown::HashMap;
 use permutation::permutation;
 use sqlparser::ast::DataType;
@@ -67,17 +70,17 @@ impl VirtualMachine {
     }
 
     /// Inserts a value for the register at the given index.
-    pub fn insert_register(&mut self, index: RegisterIndex, reg: Register) {
+    fn insert_register(&mut self, index: RegisterIndex, reg: Register) {
         self.registers.insert(index.clone(), reg);
     }
 
     /// Gets the value for the register at the given index.
-    pub fn get_register(&mut self, index: &RegisterIndex) -> Option<&Register> {
+    fn get_register(&mut self, index: &RegisterIndex) -> Option<&Register> {
         self.registers.get(index)
     }
 
     /// Creates a new table with a temp name and returns its index.
-    pub fn new_temp_table(&mut self) -> TableIndex {
+    fn new_temp_table(&mut self) -> TableIndex {
         let index = self.last_table_index.next_index();
         self.tables.insert(index, Table::new_temp(index.0));
         self.last_table_index = index;
@@ -85,7 +88,7 @@ impl VirtualMachine {
     }
 
     /// Creates a new empty table from another table (with the same schema)
-    pub fn new_table_from(&mut self, table: &TableIndex) -> TableIndex {
+    fn new_table_from(&mut self, table: &TableIndex) -> TableIndex {
         let table = self.tables.get(table).unwrap();
         let index = self.last_table_index.next_index();
         self.tables.insert(index, Table::new_from(table));
@@ -94,7 +97,7 @@ impl VirtualMachine {
     }
 
     /// Get a reference to an existing table at the given index.
-    pub fn table(&self, index: &TableIndex) -> Option<&Table> {
+    fn table(&self, index: &TableIndex) -> Option<&Table> {
         self.tables.get(index)
     }
 
@@ -102,7 +105,7 @@ impl VirtualMachine {
     ///
     /// Note: does NOT remove the table from the schema (if it was added to a schema).
     // TODO: ensure that IC gen calls this when a temp table is created.
-    pub fn drop_table(&mut self, index: &TableIndex) {
+    fn drop_table(&mut self, index: &TableIndex) {
         self.tables.remove(index);
     }
 
@@ -192,21 +195,19 @@ impl VirtualMachine {
                         .iter()
                         .filter_map(|row| {
                             match Expr::execute(expr, table, RowShared::from_raw(row, &table)) {
-                                Ok(val) => {
-                                    match val {
-                                        Value::Bool(b) => {
-                                            if b {
-                                                Some(Ok(row.clone()))
-                                            } else {
-                                                None
-                                            }
+                                Ok(val) => match val {
+                                    Value::Bool(b) => {
+                                        if b {
+                                            Some(Ok(row.clone()))
+                                        } else {
+                                            None
                                         }
-                                        _ => Some(Err(RuntimeError::FilterWithNonBoolean(
-                                            expr.clone(),
-                                            val.clone(),
-                                        ))),
                                     }
-                                }
+                                    _ => Some(Err(RuntimeError::FilterWithNonBoolean(
+                                        expr.clone(),
+                                        val.clone(),
+                                    ))),
+                                },
                                 Err(e) => Some(Err(e.into())),
                             }
                         })
@@ -327,7 +328,7 @@ impl VirtualMachine {
                     return Err(RuntimeError::RegisterNotATable("project", reg.clone()))
                 }
             },
-            Instruction::GroupBy { index, expr } => todo!(),
+            Instruction::GroupBy { index: _, expr: _ } => todo!("group by is not implemented yet"),
             Instruction::Order {
                 index,
                 expr,
@@ -466,13 +467,16 @@ impl VirtualMachine {
                     Err(e) => return Err(e),
                 }
             }
-            Instruction::DropTable { index } => todo!(),
-            Instruction::RemoveColumn { index, col_name } => todo!(),
+            Instruction::DropTable { index: _ } => todo!("drop table is not implemented yet"),
+            Instruction::RemoveColumn {
+                index: _,
+                col_name: _,
+            } => todo!("remove column is not implemented yet"),
             Instruction::RenameColumn {
-                index,
-                old_name,
-                new_name,
-            } => todo!(),
+                index: _,
+                old_name: _,
+                new_name: _,
+            } => todo!("rename column is not implemented yet"),
             Instruction::InsertDef {
                 table_reg_index,
                 index,
@@ -612,22 +616,26 @@ impl VirtualMachine {
                     table.new_row(row);
                 }
             }
-            Instruction::Update { index, col, expr } => todo!(),
+            Instruction::Update {
+                index: _,
+                col: _,
+                expr: _,
+            } => todo!("update is not implemented yet"),
             Instruction::Union {
-                input1,
-                input2,
-                output,
-            } => todo!(),
+                input1: _,
+                input2: _,
+                output: _,
+            } => todo!("union is not implemented yet"),
             Instruction::CrossJoin {
-                input1,
-                input2,
-                output,
-            } => todo!(),
+                input1: _,
+                input2: _,
+                output: _,
+            } => todo!("joins are not implemented yet"),
             Instruction::NaturalJoin {
-                input1,
-                input2,
-                output,
-            } => todo!(),
+                input1: _,
+                input2: _,
+                output: _,
+            } => todo!("joins are not implemented yet"),
         }
         Ok(None)
     }
@@ -784,6 +792,10 @@ impl Display for ExecutionError {
 
 impl Error for ExecutionError {}
 
+/// All possible errors handled during execution.
+///
+/// This includes constraint violations, errors in expression evaluation, unsupported features as
+/// well as internal errors that are explicitly caught.
 #[derive(Debug, PartialEq)]
 pub enum RuntimeError {
     ColumnNotFound(ColumnRef),

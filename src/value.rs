@@ -1,3 +1,4 @@
+//! Values contained in a table cell, its operations and errors.
 use std::{
     fmt::Display,
     ops::{Add, Div, Mul, Neg, Not, Rem, Sub},
@@ -13,7 +14,7 @@ use crate::{
 
 /// A value contained within a table's cell.
 ///
-/// One or more column types may be mapped to a single variant of [`Value`].
+/// One or more [`DataType`] variants may be mapped to a single variant of `Value`.
 #[derive(Debug, PartialEq, PartialOrd, Clone, Eq, Ord)]
 pub enum Value {
     Null,
@@ -114,7 +115,7 @@ impl Value {
         }
     }
 
-    /// Type of data this value is
+    /// Type of data this value is.
     pub fn data_type(&self) -> DataType {
         match self {
             Self::Null => DataType::Int(None),
@@ -347,6 +348,7 @@ impl Not for Value {
     }
 }
 
+/// Error performing a binary operation on two [`Value`]s.
 #[derive(Debug, PartialEq)]
 pub struct ValueBinaryOpError {
     pub operator: BinOp,
@@ -363,6 +365,7 @@ impl Display for ValueBinaryOpError {
     }
 }
 
+/// Error performing a unary operation on a [`Value`].
 #[derive(Debug, PartialEq)]
 pub struct ValueUnaryOpError {
     pub operator: UnOp,
@@ -379,6 +382,7 @@ impl Display for ValueUnaryOpError {
     }
 }
 
+/// Error in the value of a [`Value`].
 #[derive(Debug, PartialEq)]
 pub struct ValueError {
     pub reason: &'static str,

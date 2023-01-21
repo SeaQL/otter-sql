@@ -1,4 +1,4 @@
-/// Intermediate code generation from the AST.
+//! Intermediate code generation from the AST.
 use sqlparser::ast::{self, SelectItem, SetExpr, Statement, TableFactor, TableWithJoins};
 
 use std::{error::Error, fmt::Display};
@@ -383,12 +383,10 @@ pub fn codegen(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
         _ => Err(CodegenError::UnsupportedStatement(ast.to_string())),
     }?;
 
-    Ok(IntermediateCode {
-        instrs,
-        next_reg_index: current_reg,
-    })
+    Ok(IntermediateCode { instrs })
 }
 
+/// Error while generating an intermediate code from the AST.
 #[derive(Debug)]
 pub enum CodegenError {
     UnsupportedStatement(String),

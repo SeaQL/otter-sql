@@ -1,3 +1,5 @@
+//! Schemas (as in a namespace for tables, not a database schema).
+
 use crate::{vm::TableIndex, BoundedString};
 
 /// A namespace in a database.
