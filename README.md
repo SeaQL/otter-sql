@@ -1,5 +1,6 @@
 <div align="center">
-  <img src="./assets/SeaQL logo dual.png" width="320"/>
+  <!-- https://raw.githubusercontent.com/SeaQL/otter-sql/main -->
+  <img src="./assets/SeaQL logo dual.png" width="240"/>
 
   <h1>OtterSql</h1>
 
@@ -9,10 +10,6 @@
   [![docs badge](https://img.shields.io/docsrs/otter-sql)](https://docs.rs/otter-sql/latest)
   [![github workflow badge](https://github.com/SeaQL/otter-sql/actions/workflows/rust.yml/badge.svg)](https://github.com/SeaQL/otter-sql/actions/workflows/rust.yml)
 </div>
-
-<!-- https://raw.githubusercontent.com/SeaQL/otter-sql/main -->
-
-<img width="400" src="./assets/OtterSql.jpg"/>
 
 OtterSql implements a generic intermediate code (IC) with an **instruction set** for tabular data operations. This IC can be used to make in-memory mocks of larger databases such as MySQL and PostgreSQL. This IC is executed by the **OtterSql VM**. This project also provides a frontend that compiles a generic dialect of SQL to the IC.
 
@@ -35,7 +32,7 @@ See [**the crate documentation**](https://docs.rs/otter-sql/latest).
 - [x] `CREATE TABLE`/`CREATE SCHEMA`
 - [x] `INSERT` values
 - [x] Projection (`SELECT`ing specific columns)
-- [x] Selection (`WHERE` clause of `SELECT`) including complex expressions
+- [x] Filter (`WHERE` clause of `SELECT`) with complex expressions
 - [x] `LIMIT`
 - [x] `ORDER BY`
 
@@ -50,5 +47,11 @@ See [**the crate documentation**](https://docs.rs/otter-sql/latest).
 
 ### In the far future
 
-- [ ] PostgreSQL codegen (frontend)
-- [ ] MySQL codegen (frontend)
+- [ ] MySQL support
+- [ ] PostgreSQL support
+
+## Mascot
+
+Meet the official mascot of OtterSql. He is a book worm.
+
+<img width="400" src="./assets/OtterSql.png"/>
