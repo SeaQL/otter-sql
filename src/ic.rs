@@ -58,7 +58,13 @@ pub enum Instruction {
         input: RegisterIndex,
         output: RegisterIndex,
         expr: Expr,
-        #[display("{:?}", alias)]
+        #[display(
+            "{}",
+            match alias {
+                None => "None".to_owned(),
+                Some(alias) => format!("{}", alias)
+            }
+        )]
         alias: Option<BoundedString>,
     },
 
