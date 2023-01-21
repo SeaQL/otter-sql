@@ -193,7 +193,6 @@ impl VirtualMachine {
                         .filter_map(|row| {
                             match Expr::execute(expr, table, RowShared::from_raw(row, &table)) {
                                 Ok(val) => {
-                                    println!("row: {row:?}, value: {val:?}");
                                     match val {
                                         Value::Bool(b) => {
                                             if b {
