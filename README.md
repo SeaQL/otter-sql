@@ -1,29 +1,29 @@
 <div align="center">
   <!-- https://raw.githubusercontent.com/SeaQL/otter-sql/main -->
-  <img src="./assets/SeaQL logo dual.png" width="240"/>
+  <img src="./assets/SeaQL logo dual.png" width="320"/>
 
-  <h1>OtterSql</h1>
+  <h1>OtterSQL</h1>
 
-  <h3>An embeddable SQL executor</h3>
+  <h3>🦦 An Embeddable SQL Executor in Rust</h3>
 
   [![crate badge](https://img.shields.io/crates/v/otter-sql)](https://crates.io/crates/otter-sql)
   [![docs badge](https://img.shields.io/docsrs/otter-sql)](https://docs.rs/otter-sql/latest)
   [![github workflow badge](https://github.com/SeaQL/otter-sql/actions/workflows/rust.yml/badge.svg)](https://github.com/SeaQL/otter-sql/actions/workflows/rust.yml)
 </div>
 
-OtterSql implements a generic intermediate code (IC) with an **instruction set** for tabular data operations. This IC can be used to make in-memory mocks of larger databases such as MySQL and PostgreSQL. This IC is executed by the **OtterSql VM**. This project also provides a frontend that compiles a generic dialect of SQL to the IC.
+OtterSQL implements a generic intermediate code (IC) with an **instruction set** for tabular data operations. This IC can be used to make in-memory mocks of larger databases such as MySQL and PostgreSQL. This IC is executed by the **OtterSQL VM**. This project also provides a frontend that compiles a generic dialect of SQL to the IC.
 
-The primary goal for this project is to facilitate developers in *testing* their SQL-backed applications.
+The primary goal for this project is to facilitate developers in testing their SQL-backed applications. The long term goal is to have an embeddable SQL VM for use in client-side applications.
 
 Non-goals (for now): performance, concurrency, persistence, ACID compliance.
 
-## FAQ
+## Introduction
 
-See [this blog post](#) introducing OtterSql.
+See [this blog post](#) for an introduction of OtterSQL.
 
-## Use as a library
+## Using as a library
 
-See [**the crate documentation**](https://docs.rs/otter-sql/latest).
+See [the crate documentation](https://docs.rs/otter-sql/latest).
 
 ## Features
 
@@ -47,11 +47,11 @@ See [**the crate documentation**](https://docs.rs/otter-sql/latest).
 
 ### In the far future
 
-- [ ] MySQL support
-- [ ] PostgreSQL support
+- [ ] MySQL dialect and features
+- [ ] SQLite dialect and features
 
 ## Mascot
 
-Meet the official mascot of OtterSql. He is a book worm.
+Meet the official mascot of OtterSQL. He is a book worm.
 
-<img width="400" src="./assets/OtterSql.png"/>
+<img width="400" src="./assets/OtterSQL.png"/>

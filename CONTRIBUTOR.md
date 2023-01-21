@@ -1,13 +1,16 @@
 ## SeaQL Open Source Projects
+
+This project is a result of SeaQL Summer of Code 2022, funded by SeaQL.org.
+
 ### Joint Copyright Assignment by Contributor
 
 -----
 
-To SeaQL.org, Inc. ("the Org")
+To SeaQL.org ("the Org")
 
-Project: OtterSql - An embeddable SQL Interpreter (the "Project")
+Project: OtterSQL - An Embeddable SQL Executor (the "Project")
 
-Period: Jun 13, 2022 to Dec 31, 2022 (the "Project Period")
+Period: Jun 13, 2022 to Jan 31, 2023 (the "Project Period")
 
 Contact Information:
 

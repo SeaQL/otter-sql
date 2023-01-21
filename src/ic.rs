@@ -18,7 +18,7 @@ pub struct IntermediateCode {
     pub instrs: Vec<Instruction>,
 }
 
-/// The instruction set of OtterSql.
+/// The instruction set of OtterSQL.
 #[derive(Display, Debug, Clone, PartialEq)]
 pub enum Instruction {
     /// Load a [`Value`] into a register.
