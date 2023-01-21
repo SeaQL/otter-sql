@@ -4,6 +4,10 @@
   <h1>OtterSql</h1>
 
   <h3>An embeddable SQL executor</h3>
+
+  [![crate badge](https://img.shields.io/crates/v/otter-sql)](https://crates.io/crates/otter-sql)
+  [![docs badge](https://img.shields.io/docsrs/otter-sql)](https://docs.rs/otter-sql/latest)
+  [![github workflow badge](https://github.com/SeaQL/otter-sql/actions/workflows/rust.yml/badge.svg)](https://github.com/SeaQL/otter-sql/actions/workflows/rust.yml)
 </div>
 
 An in-memory database made for use in tests.
