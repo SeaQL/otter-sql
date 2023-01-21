@@ -1,3 +1,5 @@
+#![doc = include_str!("cargo_docs.md")]
+
 pub mod codegen;
 pub mod column;
 pub mod database;

@@ -121,7 +121,7 @@ impl VirtualMachine {
     }
 
     /// Executes the given intermediate code.
-    fn execute_ic(&mut self, ic: &IntermediateCode) -> Result<Option<Table>, RuntimeError> {
+    pub fn execute_ic(&mut self, ic: &IntermediateCode) -> Result<Option<Table>, RuntimeError> {
         let mut ret = None;
         for instr in &ic.instrs {
             ret = self.execute_instr(instr)?;
