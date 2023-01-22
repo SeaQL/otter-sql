@@ -1,6 +1,5 @@
-/// SQL parsing.
-///
-/// Makes use of [`sqlparser`].
+//! SQL parsing. A thin wrapper around [`sqlparser`].
+
 use sqlparser::ast::Statement;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::{Parser, ParserError};

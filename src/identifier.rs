@@ -1,3 +1,4 @@
+//! Names used for tables, columns, schemas, DBs, etc.
 use std::fmt::Display;
 
 use arraystring::{typenum::U63, ArrayString};
@@ -7,6 +8,7 @@ use sqlparser::ast::Ident;
 /// A fixed capacity copy-able string.
 pub type BoundedString = ArrayString<U63>;
 
+/// A name given to a schema. Uniquely identifies a single schema in a database.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SchemaRef(pub BoundedString);
 
@@ -28,6 +30,8 @@ impl TryFrom<Vec<Ident>> for SchemaRef {
     }
 }
 
+/// Uniquely identifies a table in a database. The schema will be assumed to be the
+/// [`default_schema`](`crate::Database::default_schema`) if not specified.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TableRef {
     pub schema_name: Option<BoundedString>,
@@ -74,6 +78,13 @@ impl Display for TableRef {
     }
 }
 
+/// Uniquely identifies a column in a given table in a database.
+///
+/// The schema will be assumed to be the
+/// [`default_schema`](`crate::Database::default_schema`) if not specified.
+///
+/// The table will be the one specified in the `WHERE` clause of the query if not specified
+/// explicitly.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ColumnRef {
     pub schema_name: Option<BoundedString>,
@@ -141,6 +152,7 @@ impl TryFrom<Vec<Ident>> for ColumnRef {
     }
 }
 
+/// Invalid identifier.
 #[derive(Debug, PartialEq)]
 pub struct IdentifierError {
     idents: Vec<Ident>,

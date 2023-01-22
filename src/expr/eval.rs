@@ -106,6 +106,7 @@ impl Expr {
     }
 }
 
+/// Error in execution of an expression.
 #[derive(Debug, PartialEq)]
 pub enum ExprExecError {
     CannotExecute(Expr),
@@ -483,9 +484,4 @@ mod test {
             Ok(Value::Bool(true))
         );
     }
-
-    // #[test]
-    // fn exec_function() {
-    //     todo!()
-    // }
 }

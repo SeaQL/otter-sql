@@ -267,6 +267,7 @@ impl TryFrom<ast::UnaryOperator> for UnOp {
     }
 }
 
+/// Error in parsing an expression.
 #[derive(Debug, PartialEq)]
 pub enum ExprError {
     Expr {

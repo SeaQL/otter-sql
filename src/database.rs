@@ -1,8 +1,13 @@
+//! Databases.
+
 use crate::{schema::Schema, BoundedString};
 
 const DEFAULT_SCHEMA_NAME: &str = "main";
 
 /// An in-memory database.
+///
+/// Note: you will need a [`VirtualMachine`](`crate::vm::VirtualMachine`)
+/// to execute queries on a database.
 pub struct Database {
     name: BoundedString,
     schemas: Vec<Schema>,

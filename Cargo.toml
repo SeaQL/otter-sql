@@ -11,9 +11,12 @@ sqlparser = "0.18.0"
 hashbrown = "0.12.3"
 permutation = "0.4.1"
 ordered-float = "3.1.0"
+tabled = { version = "0.10.0", optional = true }
+fmt-derive = "0.0.5"
 
 [features]
-thread-safe = []
+default = ["terminal-output"]
+terminal-output = ["dep:tabled"]
 
 [dev-dependencies]
 pretty_assertions = "1.2.1"

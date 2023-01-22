@@ -1,5 +1,8 @@
-/// Intermediate code generation from the AST.
-use sqlparser::ast::{self, SelectItem, SetExpr, Statement, TableFactor, TableWithJoins};
+//! Intermediate code generation from the AST.
+use sqlparser::{
+    ast::{self, SelectItem, SetExpr, Statement, TableFactor, TableWithJoins},
+    parser::ParserError,
+};
 
 use std::{error::Error, fmt::Display};
 
@@ -7,12 +10,52 @@ use crate::{
     expr::{Expr, ExprError},
     ic::{Instruction, IntermediateCode},
     identifier::IdentifierError,
+    parser::parse,
     value::{Value, ValueError},
     vm::RegisterIndex,
 };
 
+/// Represents either a parser error or a codegen error.
+#[derive(Debug)]
+pub enum ParserOrCodegenError {
+    ParserError(ParserError),
+    CodegenError(CodegenError),
+}
+
+impl Display for ParserOrCodegenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ParserError(e) => write!(f, "{}", e),
+            Self::CodegenError(e) => write!(f, "{}", e),
+        }
+    }
+}
+
+impl Error for ParserOrCodegenError {}
+
+impl From<ParserError> for ParserOrCodegenError {
+    fn from(e: ParserError) -> Self {
+        Self::ParserError(e)
+    }
+}
+
+impl From<CodegenError> for ParserOrCodegenError {
+    fn from(e: CodegenError) -> Self {
+        Self::CodegenError(e)
+    }
+}
+
+/// Generates intermediate code for the given SQL.
+pub fn codegen_str(code: &str) -> Result<Vec<IntermediateCode>, ParserOrCodegenError> {
+    let ast = parse(code)?;
+    Ok(ast
+        .into_iter()
+        .map(|stmt| codegen_ast(&stmt))
+        .collect::<Result<Vec<_>, CodegenError>>()?)
+}
+
 /// Generates intermediate code from the AST.
-pub fn codegen(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
+pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
     let mut instrs = Vec::<Instruction>::new();
 
     let mut current_reg = RegisterIndex::default();
@@ -383,12 +426,10 @@ pub fn codegen(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
         _ => Err(CodegenError::UnsupportedStatement(ast.to_string())),
     }?;
 
-    Ok(IntermediateCode {
-        instrs,
-        next_reg_index: current_reg,
-    })
+    Ok(IntermediateCode { instrs })
 }
 
+/// Error while generating an intermediate code from the AST.
 #[derive(Debug)]
 pub enum CodegenError {
     UnsupportedStatement(String),
@@ -439,7 +480,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        codegen::codegen,
+        codegen::codegen_ast,
         expr::{BinOp, Expr},
         ic::Instruction,
         identifier::{ColumnRef, SchemaRef, TableRef},
@@ -453,7 +494,7 @@ mod tests {
         assert_eq!(parsed.len(), 1);
 
         let statement = &parsed[0];
-        let ic = codegen(&statement).unwrap();
+        let ic = codegen_ast(&statement).unwrap();
         callback(ic.instrs.as_slice());
     }
 

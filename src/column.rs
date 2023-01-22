@@ -1,3 +1,4 @@
+//! Columns in a table.
 use sqlparser::ast::{ColumnOptionDef, DataType};
 
 use crate::BoundedString;

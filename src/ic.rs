@@ -1,3 +1,7 @@
+//! Intermediate representation (IR) and instruction set for an SQL database.
+
+use fmt_derive::{Debug, Display};
+
 use sqlparser::ast::{ColumnOptionDef, DataType};
 
 use crate::{
@@ -9,14 +13,13 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-/// The intermediate representation of a query.
+/// The intermediate representation of a query. Made of up [`Instruction`]s.
 pub struct IntermediateCode {
     pub instrs: Vec<Instruction>,
-    pub next_reg_index: RegisterIndex,
 }
 
-/// The instruction set.
-#[derive(Debug, Clone, PartialEq)]
+/// The instruction set of OtterSql.
+#[derive(Display, Debug, Clone, PartialEq)]
 pub enum Instruction {
     /// Load a [`Value`] into a register.
     Value { index: RegisterIndex, value: Value },
@@ -26,28 +29,28 @@ pub enum Instruction {
 
     /// Load an *existing* table given by `name`.
     ///
-    /// This will result in a [`Register::TableRef](`crate::vm::Register::TableRef) being stored at the
+    /// This will result in a [`Register::TableRef`](`crate::vm::Register::TableRef`) being stored at the
     /// given register.
     Source {
         index: RegisterIndex,
         name: TableRef,
     },
 
-    /// Create a new empty [`Register::TableRef](`crate::vm::Register::TableRef).
+    /// Create a new empty [`Register::TableRef`](`crate::vm::Register::TableRef`).
     Empty { index: RegisterIndex },
 
     /// Create a new [`Register::TableRef](`crate::vm::Register::TableRef) pointing to a
     /// non-existent table.
     NonExistent { index: RegisterIndex },
 
-    /// Filter the [`Register::TableRef](`crate::vm::Register::TableRef) at `index` using the given expression.
+    /// Filter the [`Register::TableRef`](`crate::vm::Register::TableRef`) at `index` using the given expression.
     ///
     /// This represents a `WHERE` clause of a `SELECT` statement in SQL.
     Filter { index: RegisterIndex, expr: Expr },
 
-    /// Create a projection of the columns of the [`Register::TableRef](`crate::vm::Register::TableRef) at `input`.
+    /// Create a projection of the columns of the [`Register::TableRef`](`crate::vm::Register::TableRef`) at `input`.
     ///
-    /// The resultant column is added to the [`Register::TableRef](`crate::vm::Register::TableRef)
+    /// The resultant column is added to the [`Register::TableRef`](`crate::vm::Register::TableRef`)
     /// at `output`. It must be either an empty table or a table with the same number of rows.
     ///
     /// This represents the column list of the `SELECT` statement in SQL.
@@ -55,17 +58,24 @@ pub enum Instruction {
         input: RegisterIndex,
         output: RegisterIndex,
         expr: Expr,
+        #[display(
+            "{}",
+            match alias {
+                None => "None".to_owned(),
+                Some(alias) => format!("{}", alias)
+            }
+        )]
         alias: Option<BoundedString>,
     },
 
-    /// Group the [`Register::TableRef](`crate::vm::Register::TableRef) at `index` by the given expression.
+    /// Group the [`Register::TableRef`](`crate::vm::Register::TableRef`) at `index` by the given expression.
     ///
     /// This will result in a [`Register::GroupedTable`](`crate::vm::Register::GroupedTable`) being stored at the `index` register.
     ///
     /// Must be added before any projections so as to catch errors in column selections.
     GroupBy { index: RegisterIndex, expr: Expr },
 
-    /// Order the [`Register::TableRef](`crate::vm::Register::TableRef) at `index` by the given expression.
+    /// Order the [`Register::TableRef`](`crate::vm::Register::TableRef`) at `index` by the given expression.
     ///
     /// This represents the `ORDER BY` clause in SQL.
     Order {
@@ -74,7 +84,7 @@ pub enum Instruction {
         ascending: bool,
     },
 
-    /// Truncate the [`Register::TableRef](`crate::vm::Register::TableRef) at `index` to the given number of rows.
+    /// Truncate the [`Register::TableRef`](`crate::vm::Register::TableRef`) at `index` to the given number of rows.
     ///
     /// This represents the `LIMIT` clause in SQL.
     Limit { index: RegisterIndex, limit: u64 },
@@ -110,13 +120,13 @@ pub enum Instruction {
         option: ColumnOptionDef,
     },
 
-    /// Add column in register `col_index` to the [`Register::TableRef](`crate::vm::Register::TableRef) in `table_reg_index`.
+    /// Add column in register `col_index` to the [`Register::TableRef`](`crate::vm::Register::TableRef`) in `table_reg_index`.
     AddColumn {
         table_reg_index: RegisterIndex,
         col_index: RegisterIndex,
     },
 
-    /// Create table from the [`Register::TableRef](`crate::vm::Register::TableRef) in register `index`.
+    /// Create table from the [`Register::TableRef`](`crate::vm::Register::TableRef`) in register `index`.
     ///
     /// Creation implies that the table is added to the schema.
     ///
@@ -131,20 +141,20 @@ pub enum Instruction {
     /// Drop the table referenced by the [`Register::TableRef`](`crate::vm::Register::TableRef`) in register `index`.
     DropTable { index: RegisterIndex },
 
-    /// Remove the given column from the [`Register::TableRef](`crate::vm::Register::TableRef) in register `index`.
+    /// Remove the given column from the [`Register::TableRef`](`crate::vm::Register::TableRef`) in register `index`.
     RemoveColumn {
         index: RegisterIndex,
         col_name: BoundedString,
     },
 
-    /// Rename an existing column from the [`Register::TableRef](`crate::vm::Register::TableRef) in register `index`.
+    /// Rename an existing column from the [`Register::TableRef`](`crate::vm::Register::TableRef`) in register `index`.
     RenameColumn {
         index: RegisterIndex,
         old_name: BoundedString,
         new_name: BoundedString,
     },
 
-    /// Start a new insertion into the [`Register::TableRef](`crate::vm::Register::TableRef) in register `view_index`.
+    /// Start a new insertion into the [`Register::TableRef`](`crate::vm::Register::TableRef`) in register `view_index`.
     ///
     /// A [`Register::InsertDef`](`crate::vm::Register::InsertDef`) is stored in register `index`.
     InsertDef {
@@ -177,7 +187,7 @@ pub enum Instruction {
     /// This represents an `INSERT INTO` statement.
     Insert { index: RegisterIndex },
 
-    /// Update values of the [`Register::TableRef](`crate::vm::Register::TableRef) in register `index`.
+    /// Update values of the [`Register::TableRef`](`crate::vm::Register::TableRef`) in register `index`.
     ///
     /// This represents an `UPDATE` statement.
     Update {
@@ -186,9 +196,9 @@ pub enum Instruction {
         expr: Expr,
     },
 
-    /// Perform a union of the [`Register::TableRef](`crate::vm::Register::TableRef) in register `input1` and the [`Register::TableRef](`crate::vm::Register::TableRef) in register `input2`.
+    /// Perform a union of the [`Register::TableRef`](`crate::vm::Register::TableRef`) in register `input1` and the [`Register::TableRef`](`crate::vm::Register::TableRef`) in register `input2`.
     ///
-    /// The output is stored as a [`Register::TableRef](`crate::vm::Register::TableRef) in register
+    /// The output is stored as a [`Register::TableRef`](`crate::vm::Register::TableRef`) in register
     /// `output`.
     Union {
         input1: RegisterIndex,
@@ -196,18 +206,18 @@ pub enum Instruction {
         output: RegisterIndex,
     },
 
-    /// Perform a cartesian join of the [`Register::TableRef](`crate::vm::Register::TableRef) in register `input1` and the [`Register::TableRef](`crate::vm::Register::TableRef) in register `input2`.
+    /// Perform a cartesian join of the [`Register::TableRef`](`crate::vm::Register::TableRef`) in register `input1` and the [`Register::TableRef`](`crate::vm::Register::TableRef`) in register `input2`.
     ///
-    /// The output is stored as a [`Register::TableRef](`crate::vm::Register::TableRef) in register `output`.
+    /// The output is stored as a [`Register::TableRef`](`crate::vm::Register::TableRef`) in register `output`.
     CrossJoin {
         input1: RegisterIndex,
         input2: RegisterIndex,
         output: RegisterIndex,
     },
 
-    /// Perform a natural join of the [`Register::TableRef](`crate::vm::Register::TableRef) in register `input1` and the [`Register::TableRef](`crate::vm::Register::TableRef) in register `input2`.
+    /// Perform a natural join of the [`Register::TableRef`](`crate::vm::Register::TableRef`) in register `input1` and the [`Register::TableRef](`crate::vm::Register::TableRef) in register `input2`.
     ///
-    /// The output is stored as a [`Register::TableRef](`crate::vm::Register::TableRef) in register `output`.
+    /// The output is stored as a [`Register::TableRef`](`crate::vm::Register::TableRef`) in register `output`.
     ///
     /// Note: this is both a left and a right join i.e., there will be `NULL`s where the common
     /// columns do not match. The result must be filtered at a later stage.
@@ -218,6 +228,7 @@ pub enum Instruction {
     },
 }
 
+// TODO: implement these features in the vm and use the SQL statements here to test them.
 // #[cfg(test)]
 // mod test {
 //     use sqlparser::ast::{ColumnOption, ColumnOptionDef, DataType};
