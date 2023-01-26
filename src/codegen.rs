@@ -7,7 +7,7 @@ use sqlparser::{
 use std::{error::Error, fmt::Display};
 
 use crate::{
-    expr::{Expr, ExprError},
+    expr::{BinOp, Expr, ExprError, UnOp},
     ic::{Instruction, IntermediateCode},
     identifier::IdentifierError,
     parser::parse,
@@ -54,11 +54,40 @@ pub fn codegen_str(code: &str) -> Result<Vec<IntermediateCode>, ParserOrCodegenE
         .collect::<Result<Vec<_>, CodegenError>>()?)
 }
 
+/// Context passed around to any func that needs codegen.
+struct CodegenContext {
+    pub instrs: Vec<Instruction>,
+    current_reg: RegisterIndex,
+}
+
+impl CodegenContext {
+    pub fn new() -> Self {
+        Self {
+            instrs: Vec::new(),
+            current_reg: RegisterIndex::default(),
+        }
+    }
+
+    pub fn get_and_increment_reg(&mut self) -> RegisterIndex {
+        let reg = self.current_reg;
+        self.current_reg = self.current_reg.next_index();
+        reg
+    }
+
+    pub fn last_used_reg(&self) -> RegisterIndex {
+        self.current_reg
+    }
+}
+
+impl Default for CodegenContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Generates intermediate code from the AST.
 pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
-    let mut instrs = Vec::<Instruction>::new();
-
-    let mut current_reg = RegisterIndex::default();
+    let mut ctx = CodegenContext::default();
 
     match ast {
         Statement::CreateTable {
@@ -87,35 +116,33 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
             collation: _,
             on_commit: _,
         } => {
-            let table_reg_index = current_reg;
-            instrs.push(Instruction::Empty {
+            let table_reg_index = ctx.get_and_increment_reg();
+            ctx.instrs.push(Instruction::Empty {
                 index: table_reg_index,
             });
-            current_reg = current_reg.next_index();
 
-            let col_reg_index = current_reg;
-            current_reg = current_reg.next_index();
+            let col_reg_index = ctx.get_and_increment_reg();
             for col in columns {
-                instrs.push(Instruction::ColumnDef {
+                ctx.instrs.push(Instruction::ColumnDef {
                     index: col_reg_index,
                     name: col.name.value.as_str().into(),
                     data_type: col.data_type.clone(),
                 });
 
                 for option in col.options.iter() {
-                    instrs.push(Instruction::AddColumnOption {
+                    ctx.instrs.push(Instruction::AddColumnOption {
                         index: col_reg_index,
                         option: option.clone(),
                     });
                 }
 
-                instrs.push(Instruction::AddColumn {
+                ctx.instrs.push(Instruction::AddColumn {
                     table_reg_index,
                     col_index: col_reg_index,
                 });
             }
 
-            instrs.push(Instruction::NewTable {
+            ctx.instrs.push(Instruction::NewTable {
                 index: table_reg_index,
                 name: name.0.clone().try_into()?,
                 exists_ok: *if_not_exists,
@@ -134,22 +161,20 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
             table: _,
             on: _,
         } => {
-            let table_reg_index = current_reg;
-            instrs.push(Instruction::Source {
+            let table_reg_index = ctx.get_and_increment_reg();
+            ctx.instrs.push(Instruction::Source {
                 index: table_reg_index,
                 name: table_name.0.clone().try_into()?,
             });
-            current_reg = current_reg.next_index();
 
-            let insert_reg_index = current_reg;
-            instrs.push(Instruction::InsertDef {
+            let insert_reg_index = ctx.get_and_increment_reg();
+            ctx.instrs.push(Instruction::InsertDef {
                 table_reg_index,
                 index: insert_reg_index,
             });
-            current_reg = current_reg.next_index();
 
             for col in columns {
-                instrs.push(Instruction::ColumnInsertDef {
+                ctx.instrs.push(Instruction::ColumnInsertDef {
                     insert_index: insert_reg_index,
                     col_name: col.value.as_str().into(),
                 })
@@ -162,18 +187,18 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                     ..
                 } => {
                     for row in values.0.clone() {
-                        let row_reg = current_reg;
-                        current_reg = current_reg.next_index();
+                        let row_reg = ctx.get_and_increment_reg();
 
-                        instrs.push(Instruction::RowDef {
+                        ctx.instrs.push(Instruction::RowDef {
                             insert_index: insert_reg_index,
                             row_index: row_reg,
                         });
 
                         for value in row {
-                            instrs.push(Instruction::AddValue {
+                            let value = codegen_expr(value, &mut ctx)?;
+                            ctx.instrs.push(Instruction::AddValue {
                                 row_index: row_reg,
-                                expr: value.try_into()?,
+                                expr: value,
                             });
                         }
                     }
@@ -185,7 +210,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                 )),
             }?;
 
-            instrs.push(Instruction::Insert {
+            ctx.instrs.push(Instruction::Insert {
                 index: insert_reg_index,
             });
 
@@ -193,8 +218,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
         }
         Statement::Query(query) => {
             // TODO: support CTEs
-            let mut table_reg_index = current_reg;
-            current_reg = current_reg.next_index();
+            let mut table_reg_index = ctx.get_and_increment_reg();
 
             match &query.body {
                 SetExpr::Select(select) => {
@@ -215,7 +239,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                                     alias: _,
                                     args: _,
                                     with_hints: _,
-                                } => instrs.push(Instruction::Source {
+                                } => ctx.instrs.push(Instruction::Source {
                                     index: table_reg_index,
                                     name: name.0.clone().try_into()?,
                                 }),
@@ -249,7 +273,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                                 }
                             }
                         }
-                        &[] => instrs.push(Instruction::NonExistent {
+                        &[] => ctx.instrs.push(Instruction::NonExistent {
                             index: table_reg_index,
                         }),
                         _ => {
@@ -262,43 +286,47 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                     }
 
                     if let Some(expr) = select.selection.clone() {
-                        instrs.push(Instruction::Filter {
+                        let expr = codegen_expr(expr, &mut ctx)?;
+                        ctx.instrs.push(Instruction::Filter {
                             index: table_reg_index,
-                            expr: expr.try_into()?,
+                            expr,
                         })
                     }
 
                     for group_by in select.group_by.clone() {
-                        instrs.push(Instruction::GroupBy {
+                        let group_by = codegen_expr(group_by, &mut ctx)?;
+                        ctx.instrs.push(Instruction::GroupBy {
                             index: table_reg_index,
-                            expr: group_by.try_into()?,
+                            expr: group_by,
                         });
                     }
 
                     if let Some(expr) = select.having.clone() {
-                        instrs.push(Instruction::Filter {
+                        let expr = codegen_expr(expr, &mut ctx)?;
+                        ctx.instrs.push(Instruction::Filter {
                             index: table_reg_index,
-                            expr: expr.try_into()?,
+                            expr,
                         })
                     }
 
                     if !select.projection.is_empty() {
                         let original_table_reg_index = table_reg_index;
-                        table_reg_index = current_reg;
-                        current_reg = current_reg.next_index();
+                        table_reg_index = ctx.get_and_increment_reg();
 
-                        instrs.push(Instruction::Empty {
+                        ctx.instrs.push(Instruction::Empty {
                             index: table_reg_index,
                         });
 
                         for projection in select.projection.clone() {
-                            instrs.push(Instruction::Project {
+                            let projection = Instruction::Project {
                                 input: original_table_reg_index,
                                 output: table_reg_index,
                                 expr: match projection {
-                                    SelectItem::UnnamedExpr(ref expr) => expr.clone().try_into()?,
+                                    SelectItem::UnnamedExpr(ref expr) => {
+                                        codegen_expr(expr.clone(), &mut ctx)?
+                                    }
                                     SelectItem::ExprWithAlias { ref expr, .. } => {
-                                        expr.clone().try_into()?
+                                        codegen_expr(expr.clone(), &mut ctx)?
                                     }
                                     SelectItem::QualifiedWildcard(_) => Expr::Wildcard,
                                     SelectItem::Wildcard => Expr::Wildcard,
@@ -316,7 +344,8 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                                     }
                                     SelectItem::Wildcard => None,
                                 },
-                            })
+                            };
+                            ctx.instrs.push(projection)
                         }
 
                         if select.distinct {
@@ -329,8 +358,8 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                 }
                 SetExpr::Values(exprs) => {
                     if exprs.0.len() == 1 && exprs.0[0].len() == 1 {
-                        let expr: Expr = exprs.0[0][0].clone().try_into()?;
-                        instrs.push(Instruction::Expr {
+                        let expr: Expr = codegen_expr(exprs.0[0][0].clone(), &mut ctx)?;
+                        ctx.instrs.push(Instruction::Expr {
                             index: table_reg_index,
                             expr,
                         });
@@ -376,9 +405,10 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
             };
 
             for order_by in query.order_by.clone() {
-                instrs.push(Instruction::Order {
+                let order_by_expr = codegen_expr(order_by.expr, &mut ctx)?;
+                ctx.instrs.push(Instruction::Order {
                     index: table_reg_index,
-                    expr: order_by.expr.try_into()?,
+                    expr: order_by_expr,
                     ascending: order_by.asc.unwrap_or(true),
                 });
                 // TODO: support NULLS FIRST/NULLS LAST
@@ -387,7 +417,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
             if let Some(limit) = query.limit.clone() {
                 if let ast::Expr::Value(val) = limit.clone() {
                     if let Value::Int64(limit) = val.clone().try_into()? {
-                        instrs.push(Instruction::Limit {
+                        ctx.instrs.push(Instruction::Limit {
                             index: table_reg_index,
                             limit: limit as u64,
                         });
@@ -407,7 +437,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                 }
             }
 
-            instrs.push(Instruction::Return {
+            ctx.instrs.push(Instruction::Return {
                 index: table_reg_index,
             });
 
@@ -417,7 +447,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
             schema_name,
             if_not_exists,
         } => {
-            instrs.push(Instruction::NewSchema {
+            ctx.instrs.push(Instruction::NewSchema {
                 schema_name: schema_name.0.clone().try_into()?,
                 exists_ok: *if_not_exists,
             });
@@ -426,7 +456,109 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
         _ => Err(CodegenError::UnsupportedStatement(ast.to_string())),
     }?;
 
-    Ok(IntermediateCode { instrs })
+    Ok(IntermediateCode { instrs: ctx.instrs })
+}
+
+fn codegen_expr(expr_ast: ast::Expr, ctx: &mut CodegenContext) -> Result<Expr, ExprError> {
+    match expr_ast {
+        ast::Expr::Identifier(i) => Ok(Expr::ColumnRef(vec![i].try_into()?)),
+        ast::Expr::CompoundIdentifier(i) => Ok(Expr::ColumnRef(i.try_into()?)),
+        ast::Expr::IsFalse(e) => Ok(Expr::Unary {
+            op: UnOp::IsFalse,
+            operand: Box::new(codegen_expr(*e, ctx)?),
+        }),
+        ast::Expr::IsTrue(e) => Ok(Expr::Unary {
+            op: UnOp::IsTrue,
+            operand: Box::new(codegen_expr(*e, ctx)?),
+        }),
+        ast::Expr::IsNull(e) => Ok(Expr::Unary {
+            op: UnOp::IsNull,
+            operand: Box::new(codegen_expr(*e, ctx)?),
+        }),
+        ast::Expr::IsNotNull(e) => Ok(Expr::Unary {
+            op: UnOp::IsNotNull,
+            operand: Box::new(codegen_expr(*e, ctx)?),
+        }),
+        ast::Expr::Between {
+            expr,
+            negated,
+            low,
+            high,
+        } => {
+            let expr: Box<Expr> = Box::new(codegen_expr(*expr, ctx)?);
+            let left = Box::new(codegen_expr(*low, ctx)?);
+            let right = Box::new(codegen_expr(*high, ctx)?);
+            let between = Expr::Binary {
+                left: Box::new(Expr::Binary {
+                    left,
+                    op: BinOp::LessThanOrEqual,
+                    right: expr.clone(),
+                }),
+                op: BinOp::And,
+                right: Box::new(Expr::Binary {
+                    left: expr,
+                    op: BinOp::LessThanOrEqual,
+                    right,
+                }),
+            };
+            if negated {
+                Ok(Expr::Unary {
+                    op: UnOp::Not,
+                    operand: Box::new(between),
+                })
+            } else {
+                Ok(between)
+            }
+        }
+        ast::Expr::BinaryOp { left, op, right } => Ok(Expr::Binary {
+            left: Box::new(codegen_expr(*left, ctx)?),
+            op: op.try_into()?,
+            right: Box::new(codegen_expr(*right, ctx)?),
+        }),
+        ast::Expr::UnaryOp { op, expr } => Ok(Expr::Unary {
+            op: op.try_into()?,
+            operand: Box::new(codegen_expr(*expr, ctx)?),
+        }),
+        ast::Expr::Value(v) => Ok(Expr::Value(v.try_into()?)),
+        ast::Expr::Function(ref f) => {
+            match f.args {
+                &[ast::Expr::Identifier(i)] => {
+                    ctx.push(Instruction::Aggregate {
+                        input: ctx.last_used_reg(),
+                        output: ctx.get_and_increment_reg(),
+                        func: f.name.to_string(),
+                        col_name: (),
+                    })
+                    // Ok(Expr::ColumnRef(vec![i].try_into()?))
+                }
+            }
+            Ok(Expr::Function {
+                name: f.name.to_string().as_str().into(),
+                args: f
+                    .args
+                    .iter()
+                    .map(|arg| match arg {
+                        ast::FunctionArg::Unnamed(arg_expr) => match arg_expr {
+                            ast::FunctionArgExpr::Expr(e) => Ok(codegen_expr(e.clone(), instrs)?),
+                            ast::FunctionArgExpr::Wildcard => Ok(Expr::Wildcard),
+                            ast::FunctionArgExpr::QualifiedWildcard(_) => Err(ExprError::Expr {
+                                reason: "Qualified wildcards are not supported yet",
+                                expr: expr_ast.clone(),
+                            }),
+                        },
+                        ast::FunctionArg::Named { .. } => Err(ExprError::Expr {
+                            reason: "Named function arguments are not supported",
+                            expr: expr_ast.clone(),
+                        }),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            })
+        }
+        _ => Err(ExprError::Expr {
+            reason: "Unsupported expression",
+            expr: expr_ast,
+        }),
+    }
 }
 
 /// Error while generating an intermediate code from the AST.

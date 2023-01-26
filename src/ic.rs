@@ -5,7 +5,7 @@ use fmt_derive::{Debug, Display};
 use sqlparser::ast::{ColumnOptionDef, DataType};
 
 use crate::{
-    expr::Expr,
+    expr::{Expr, agg::AggregateFunction},
     identifier::{SchemaRef, TableRef},
     value::Value,
     vm::RegisterIndex,
@@ -66,6 +66,20 @@ pub enum Instruction {
             }
         )]
         alias: Option<BoundedString>,
+    },
+
+    Aggregate {
+        input: RegisterIndex,
+        output: RegisterIndex,
+        func: AggregateFunction,
+        #[display(
+            "{}",
+            match col_name {
+                None => "None".to_owned(),
+                Some(col_name) => format!("{}", col_name)
+            }
+        )]
+        col_name: Option<BoundedString>,
     },
 
     /// Group the [`Register::TableRef`](`crate::vm::Register::TableRef`) at `index` by the given expression.

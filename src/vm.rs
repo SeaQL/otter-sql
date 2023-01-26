@@ -328,6 +328,12 @@ impl VirtualMachine {
                     return Err(RuntimeError::RegisterNotATable("project", reg.clone()))
                 }
             },
+            Instruction::Aggregate {
+                input: _,
+                output: _,
+                func: _,
+                col_name: _,
+            } => todo!("aggregate is not implemented yet"),
             Instruction::GroupBy { index: _, expr: _ } => todo!("group by is not implemented yet"),
             Instruction::Order {
                 index,

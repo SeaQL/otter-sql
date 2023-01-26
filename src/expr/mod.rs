@@ -11,6 +11,7 @@ use crate::{
 };
 
 pub mod eval;
+pub mod agg;
 
 /// An expression
 #[derive(Debug, Clone, PartialEq)]
@@ -127,98 +128,6 @@ impl Display for UnOp {
                 UnOp::IsNotNull => "IS NOT NULL",
             }
         )
-    }
-}
-
-impl TryFrom<ast::Expr> for Expr {
-    type Error = ExprError;
-    fn try_from(expr_ast: ast::Expr) -> Result<Self, Self::Error> {
-        match expr_ast {
-            ast::Expr::Identifier(i) => Ok(Expr::ColumnRef(vec![i].try_into()?)),
-            ast::Expr::CompoundIdentifier(i) => Ok(Expr::ColumnRef(i.try_into()?)),
-            ast::Expr::IsFalse(e) => Ok(Expr::Unary {
-                op: UnOp::IsFalse,
-                operand: Box::new((*e).try_into()?),
-            }),
-            ast::Expr::IsTrue(e) => Ok(Expr::Unary {
-                op: UnOp::IsTrue,
-                operand: Box::new((*e).try_into()?),
-            }),
-            ast::Expr::IsNull(e) => Ok(Expr::Unary {
-                op: UnOp::IsNull,
-                operand: Box::new((*e).try_into()?),
-            }),
-            ast::Expr::IsNotNull(e) => Ok(Expr::Unary {
-                op: UnOp::IsNotNull,
-                operand: Box::new((*e).try_into()?),
-            }),
-            ast::Expr::Between {
-                expr,
-                negated,
-                low,
-                high,
-            } => {
-                let expr: Box<Expr> = Box::new((*expr).try_into()?);
-                let left = Box::new((*low).try_into()?);
-                let right = Box::new((*high).try_into()?);
-                let between = Expr::Binary {
-                    left: Box::new(Expr::Binary {
-                        left,
-                        op: BinOp::LessThanOrEqual,
-                        right: expr.clone(),
-                    }),
-                    op: BinOp::And,
-                    right: Box::new(Expr::Binary {
-                        left: expr,
-                        op: BinOp::LessThanOrEqual,
-                        right,
-                    }),
-                };
-                if negated {
-                    Ok(Expr::Unary {
-                        op: UnOp::Not,
-                        operand: Box::new(between),
-                    })
-                } else {
-                    Ok(between)
-                }
-            }
-            ast::Expr::BinaryOp { left, op, right } => Ok(Expr::Binary {
-                left: Box::new((*left).try_into()?),
-                op: op.try_into()?,
-                right: Box::new((*right).try_into()?),
-            }),
-            ast::Expr::UnaryOp { op, expr } => Ok(Expr::Unary {
-                op: op.try_into()?,
-                operand: Box::new((*expr).try_into()?),
-            }),
-            ast::Expr::Value(v) => Ok(Expr::Value(v.try_into()?)),
-            ast::Expr::Function(ref f) => Ok(Expr::Function {
-                name: f.name.to_string().as_str().into(),
-                args: f
-                    .args
-                    .iter()
-                    .map(|arg| match arg {
-                        ast::FunctionArg::Unnamed(arg_expr) => match arg_expr {
-                            ast::FunctionArgExpr::Expr(e) => Ok(e.clone().try_into()?),
-                            ast::FunctionArgExpr::Wildcard => Ok(Expr::Wildcard),
-                            ast::FunctionArgExpr::QualifiedWildcard(_) => Err(ExprError::Expr {
-                                reason: "Qualified wildcards are not supported yet",
-                                expr: expr_ast.clone(),
-                            }),
-                        },
-                        ast::FunctionArg::Named { .. } => Err(ExprError::Expr {
-                            reason: "Named function arguments are not supported",
-                            expr: expr_ast.clone(),
-                        }),
-                    })
-                    .collect::<Result<Vec<_>, _>>()?,
-            }),
-            _ => Err(ExprError::Expr {
-                reason: "Unsupported expression",
-                expr: expr_ast,
-            }),
-        }
     }
 }
 
