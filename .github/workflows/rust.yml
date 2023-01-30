@@ -47,6 +47,6 @@ jobs:
     - name: Install linter
       run: cargo install conventional_commits_linter --version ^0
     - name: Run linter
-      run: conventional_commits_linter --from-reference "${{github.event.pull_request.base.ref}}" --allow-angular-type-only
+      run: conventional_commits_linter --from-reference "origin/${{github.event.pull_request.base.ref}}" --allow-angular-type-only
   
   
