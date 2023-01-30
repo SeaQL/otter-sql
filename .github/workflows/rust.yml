@@ -33,12 +33,21 @@ jobs:
       - run: cargo clippy --all-targets
 
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v3
     - name: Build
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+  
+  commits-linting:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install linter
+      run: cargo install conventional_commits_linter --version ^0
+    - name: Run linter
+      run: /usr/local/cargo/bin/conventional_commits_linter --from-reference "origin/${github.event.pull_request.base.ref}" --allow-angular-type-only
+  
+  
