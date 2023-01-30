@@ -33,12 +33,23 @@ jobs:
       - run: cargo clippy --all-targets
 
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v3
     - name: Build
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+  
+  commits-linting:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - name: Install linter
+      run: wget -q -O tmp.zip "https://gitlab.com/DeveloperC/conventional_commits_linter/-/jobs/artifacts/bin-0.12.0/download?job=release-binary-compiling-x86_64-linux-musl" && unzip tmp.zip && rm tmp.zip
+    - name: Run linter
+      run: ./conventional_commits_linter --from-reference "origin/${{github.event.pull_request.base.ref}}" --allow-angular-type-only
+  
+  
