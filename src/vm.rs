@@ -13,7 +13,7 @@ use crate::codegen::{codegen_ast, CodegenError};
 use crate::column::Column;
 use crate::expr::eval::ExprExecError;
 use crate::expr::Expr;
-use crate::ic::{Instruction, IntermediateCode};
+use crate::ir::{Instruction, IntermediateCode};
 use crate::identifier::{ColumnRef, TableRef};
 use crate::parser::parse;
 use crate::schema::Schema;

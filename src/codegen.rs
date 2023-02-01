@@ -8,7 +8,7 @@ use std::{error::Error, fmt::Display};
 
 use crate::{
     expr::{BinOp, Expr, ExprError, UnOp},
-    ic::{Instruction, IntermediateCode},
+    ir::{Instruction, IntermediateCode},
     identifier::IdentifierError,
     parser::parse,
     value::{Value, ValueError},
@@ -617,7 +617,7 @@ mod tests {
     use crate::{
         codegen::codegen_ast,
         expr::{BinOp, Expr},
-        ic::Instruction,
+        ir::Instruction,
         identifier::{ColumnRef, SchemaRef, TableRef},
         parser::parse,
         value::Value,
