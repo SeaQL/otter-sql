@@ -1,3 +1,5 @@
+> This is still WIP and essentially an unpublished project
+
 <div align="center">
   <img src="https://raw.githubusercontent.com/SeaQL/otter-sql/main/assets/SeaQL logo dual.png" width="240"/>
 
