@@ -5,9 +5,8 @@ use fmt_derive::{Debug, Display};
 use sqlparser::ast::{ColumnOptionDef, DataType};
 
 use crate::{
-    expr::{Expr, agg::AggregateFunction},
+    expr::{agg::AggregateFunction, Expr},
     identifier::{SchemaRef, TableRef},
-    value::Value,
     vm::RegisterIndex,
     BoundedString,
 };
@@ -21,9 +20,6 @@ pub struct IntermediateCode {
 /// The instruction set of OtterSQL.
 #[derive(Display, Debug, Clone, PartialEq)]
 pub enum Instruction {
-    /// Load a [`Value`] into a register.
-    Value { index: RegisterIndex, value: Value },
-
     /// Load a [`Expr`] into a register.
     Expr { index: RegisterIndex, expr: Expr },
 
@@ -82,12 +78,16 @@ pub enum Instruction {
         col_name: Option<BoundedString>,
     },
 
-    /// Group the [`Register::TableRef`](`crate::vm::Register::TableRef`) at `index` by the given expression.
+    /// Group the [`Register::TableRef`](`crate::vm::Register::TableRef`) at `input` by the given expression.
     ///
-    /// This will result in a [`Register::GroupedTable`](`crate::vm::Register::GroupedTable`) being stored at the `index` register.
+    /// This will result in a [`Register::GroupedTable`](`crate::vm::Register::GroupedTable`) being stored at the `output` register.
     ///
     /// Must be added before any projections so as to catch errors in column selections.
-    GroupBy { index: RegisterIndex, expr: Expr },
+    GroupBy {
+        input: RegisterIndex,
+        output: RegisterIndex,
+        expr: Expr,
+    },
 
     /// Order the [`Register::TableRef`](`crate::vm::Register::TableRef`) at `index` by the given expression.
     ///

@@ -133,10 +133,6 @@ impl VirtualMachine {
     fn execute_instr(&mut self, instr: &Instruction) -> Result<Option<Table>, RuntimeError> {
         let _ = &self.database;
         match instr {
-            Instruction::Value { index, value } => {
-                self.registers
-                    .insert(*index, Register::Value(value.clone()));
-            }
             Instruction::Expr { index, expr } => {
                 self.registers.insert(*index, Register::Expr(expr.clone()));
             }

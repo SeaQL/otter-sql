@@ -295,10 +295,13 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
 
                     for group_by in select.group_by.clone() {
                         let group_by = codegen_expr(group_by, &mut ctx)?;
+                        let grouped_reg_index = ctx.get_and_increment_reg();
                         ctx.instrs.push(Instruction::GroupBy {
-                            index: table_reg_index,
+                            input: table_reg_index,
+                            output: grouped_reg_index,
                             expr: group_by,
                         });
+                        table_reg_index = grouped_reg_index
                     }
 
                     if let Some(expr) = select.having.clone() {
