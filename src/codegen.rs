@@ -1,18 +1,23 @@
 //! Intermediate code generation from the AST.
 use sqlparser::{
-    ast::{self, SelectItem, SetExpr, Statement, TableFactor, TableWithJoins},
+    ast::{
+        self, Function, FunctionArg, SelectItem, SetExpr, Statement, TableFactor, TableWithJoins,
+    },
     parser::ParserError,
 };
+
+use phf::{phf_set, Set};
 
 use std::{error::Error, fmt::Display};
 
 use crate::{
     expr::{BinOp, Expr, ExprError, UnOp},
-    ir::{Instruction, IntermediateCode},
     identifier::IdentifierError,
+    ir::{Instruction, IntermediateCode},
     parser::parse,
     value::{Value, ValueError},
     vm::RegisterIndex,
+    BoundedString,
 };
 
 /// Represents either a parser error or a codegen error.
@@ -54,10 +59,14 @@ pub fn codegen_str(code: &str) -> Result<Vec<IntermediateCode>, ParserOrCodegenE
         .collect::<Result<Vec<_>, CodegenError>>()?)
 }
 
+const TEMP_COL_NAME_PREFIX: &'static str = "__otter_temp_col";
+
 /// Context passed around to any func that needs codegen.
 struct CodegenContext {
     pub instrs: Vec<Instruction>,
     current_reg: RegisterIndex,
+    last_temp_col_num: usize,
+    is_inside_agg_fn: bool,
 }
 
 impl CodegenContext {
@@ -65,6 +74,8 @@ impl CodegenContext {
         Self {
             instrs: Vec::new(),
             current_reg: RegisterIndex::default(),
+            last_temp_col_num: 0,
+            is_inside_agg_fn: false,
         }
     }
 
@@ -77,6 +88,13 @@ impl CodegenContext {
     pub fn last_used_reg(&self) -> RegisterIndex {
         self.current_reg
     }
+
+    pub fn get_new_temp_col(&mut self) -> BoundedString {
+        self.last_temp_col_num += 1;
+        format!("{TEMP_COL_NAME_PREFIX}_{}", self.last_temp_col_num)
+            .as_str()
+            .into()
+    }
 }
 
 impl Default for CodegenContext {
@@ -84,6 +102,13 @@ impl Default for CodegenContext {
         Self::new()
     }
 }
+
+static AGGREGATE_FUNCTIONS: Set<&'static str> = phf_set! {
+    "count",
+    "max",
+    "min",
+    "sum",
+};
 
 /// Generates intermediate code from the AST.
 pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
@@ -321,19 +346,23 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                         });
 
                         for projection in select.projection.clone() {
+                            // TODO(now): call codegen_fn_agg here and use new register index as
+                            // the input for that project
+                            let expr = match projection {
+                                SelectItem::UnnamedExpr(ref expr) => {
+                                    codegen_expr(expr.clone(), &mut ctx)?
+                                }
+                                SelectItem::ExprWithAlias { ref expr, .. } => {
+                                    codegen_expr(expr.clone(), &mut ctx)?
+                                }
+                                SelectItem::QualifiedWildcard(_) => Expr::Wildcard,
+                                SelectItem::Wildcard => Expr::Wildcard,
+                            };
+
                             let projection = Instruction::Project {
                                 input: original_table_reg_index,
                                 output: table_reg_index,
-                                expr: match projection {
-                                    SelectItem::UnnamedExpr(ref expr) => {
-                                        codegen_expr(expr.clone(), &mut ctx)?
-                                    }
-                                    SelectItem::ExprWithAlias { ref expr, .. } => {
-                                        codegen_expr(expr.clone(), &mut ctx)?
-                                    }
-                                    SelectItem::QualifiedWildcard(_) => Expr::Wildcard,
-                                    SelectItem::Wildcard => Expr::Wildcard,
-                                },
+                                expr,
                                 alias: match projection {
                                     SelectItem::UnnamedExpr(_) => None,
                                     SelectItem::ExprWithAlias { alias, .. } => {
@@ -524,42 +553,80 @@ fn codegen_expr(expr_ast: ast::Expr, ctx: &mut CodegenContext) -> Result<Expr, E
         }),
         ast::Expr::Value(v) => Ok(Expr::Value(v.try_into()?)),
         ast::Expr::Function(ref f) => {
-            match f.args {
-                &[ast::Expr::Identifier(i)] => {
-                    ctx.push(Instruction::Aggregate {
-                        input: ctx.last_used_reg(),
-                        output: ctx.get_and_increment_reg(),
-                        func: f.name.to_string(),
-                        col_name: (),
-                    })
-                    // Ok(Expr::ColumnRef(vec![i].try_into()?))
-                }
-            }
+            let fn_name = f.name.to_string();
             Ok(Expr::Function {
-                name: f.name.to_string().as_str().into(),
+                name: fn_name.as_str().into(),
                 args: f
                     .args
                     .iter()
-                    .map(|arg| match arg {
-                        ast::FunctionArg::Unnamed(arg_expr) => match arg_expr {
-                            ast::FunctionArgExpr::Expr(e) => Ok(codegen_expr(e.clone(), instrs)?),
-                            ast::FunctionArgExpr::Wildcard => Ok(Expr::Wildcard),
-                            ast::FunctionArgExpr::QualifiedWildcard(_) => Err(ExprError::Expr {
-                                reason: "Qualified wildcards are not supported yet",
-                                expr: expr_ast.clone(),
-                            }),
-                        },
-                        ast::FunctionArg::Named { .. } => Err(ExprError::Expr {
-                            reason: "Named function arguments are not supported",
-                            expr: expr_ast.clone(),
-                        }),
-                    })
+                    .map(|arg| codegen_fn_arg(&expr_ast, arg, ctx))
                     .collect::<Result<Vec<_>, _>>()?,
             })
         }
         _ => Err(ExprError::Expr {
             reason: "Unsupported expression",
             expr: expr_ast,
+        }),
+    }
+}
+
+fn codegen_fn_agg(
+    expr_ast: &ast::Expr,
+    f: &Function,
+    ctx: &mut CodegenContext,
+) -> Result<(RegisterIndex, Expr), ExprError> {
+    let fn_name = f.name.to_string();
+    if AGGREGATE_FUNCTIONS.contains(&fn_name) {
+        // TODO: support aggregate functions that take multiple args
+        if f.args.len() != 1 {
+            return Err(ExprError::Expr {
+                        reason: "Aggregate functions that take more or less than one argument are not supported yet",
+                        expr: expr_ast.clone(),
+                    });
+        }
+
+        if ctx.is_inside_agg_fn {
+            return Err(ExprError::Expr {
+                reason: "Aggregate functions cannot be nested",
+                expr: expr_ast.clone(),
+            });
+        }
+        ctx.is_inside_agg_fn = true;
+
+        let orig_table_reg = ctx.last_used_reg();
+        let temp_table_reg = ctx.get_and_increment_reg();
+        let projected_col_name = ctx.get_new_temp_col();
+
+        ctx.instrs.push(Instruction::Project {
+            input: orig_table_reg,
+            output: temp_table_reg,
+            expr: codegen_fn_arg(&expr_ast, &f.args[0], ctx)?,
+            alias: Some(projected_col_name),
+        });
+
+        // TODO(now): insert Aggregate instruction here
+
+        ctx.is_inside_agg_fn = false;
+    }
+}
+
+fn codegen_fn_arg(
+    expr_ast: &ast::Expr,
+    arg: &FunctionArg,
+    ctx: &mut CodegenContext,
+) -> Result<Expr, ExprError> {
+    match arg {
+        ast::FunctionArg::Unnamed(arg_expr) => match arg_expr {
+            ast::FunctionArgExpr::Expr(e) => Ok(codegen_expr(e.clone(), ctx)?),
+            ast::FunctionArgExpr::Wildcard => Ok(Expr::Wildcard),
+            ast::FunctionArgExpr::QualifiedWildcard(_) => Err(ExprError::Expr {
+                reason: "Qualified wildcards are not supported yet",
+                expr: expr_ast.clone(),
+            }),
+        },
+        ast::FunctionArg::Named { .. } => Err(ExprError::Expr {
+            reason: "Named function arguments are not supported",
+            expr: expr_ast.clone(),
         }),
     }
 }
@@ -617,8 +684,8 @@ mod tests {
     use crate::{
         codegen::codegen_ast,
         expr::{BinOp, Expr},
-        ir::Instruction,
         identifier::{ColumnRef, SchemaRef, TableRef},
+        ir::Instruction,
         parser::parse,
         value::Value,
         vm::RegisterIndex,
