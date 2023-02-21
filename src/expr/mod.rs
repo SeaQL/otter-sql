@@ -10,8 +10,8 @@ use crate::{
     BoundedString,
 };
 
-pub mod eval;
 pub mod agg;
+pub mod eval;
 
 /// An expression
 #[derive(Debug, Clone, PartialEq)]
@@ -193,6 +193,7 @@ pub enum ExprError {
     },
     Value(ValueError),
     Identifier(IdentifierError),
+    UnknownAggregateFunction(String),
 }
 
 impl Display for ExprError {
@@ -209,6 +210,9 @@ impl Display for ExprError {
             }
             ExprError::Value(v) => write!(f, "{}", v),
             ExprError::Identifier(v) => write!(f, "{}", v),
+            ExprError::UnknownAggregateFunction(agg) => {
+                write!(f, "Unsupported Aggregate Function: {}", agg)
+            }
         }
     }
 }

@@ -11,7 +11,7 @@ use phf::{phf_set, Set};
 use std::{error::Error, fmt::Display};
 
 use crate::{
-    expr::{BinOp, Expr, ExprError, UnOp},
+    expr::{agg::AggregateFunction, BinOp, Expr, ExprError, UnOp},
     identifier::IdentifierError,
     ir::{Instruction, IntermediateCode},
     parser::parse,
@@ -345,9 +345,25 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                             index: table_reg_index,
                         });
 
+                        let has_aggs = select.projection.iter().any(|p| is_projection_agg(p));
+
+                        let intermediate_reg_index;
+                        if has_aggs {
+                            intermediate_reg_index = ctx.get_and_increment_reg();
+
+                            ctx.instrs.push(Instruction::Empty {
+                                index: intermediate_reg_index,
+                            });
+                        }
+
                         for projection in select.projection.clone() {
-                            // TODO(now): call codegen_fn_agg here and use new register index as
-                            // the input for that project
+                            let expr_ast = match projection {
+                                SelectItem::UnnamedExpr(ref expr)
+                                | SelectItem::ExprWithAlias { ref expr, .. } => Some(expr),
+                                SelectItem::QualifiedWildcard(_) => None,
+                                SelectItem::Wildcard => None,
+                            };
+
                             let expr = match projection {
                                 SelectItem::UnnamedExpr(ref expr) => {
                                     codegen_expr(expr.clone(), &mut ctx)?
@@ -359,25 +375,45 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                                 SelectItem::Wildcard => Expr::Wildcard,
                             };
 
-                            let projection = Instruction::Project {
-                                input: original_table_reg_index,
-                                output: table_reg_index,
-                                expr,
-                                alias: match projection {
-                                    SelectItem::UnnamedExpr(_) => None,
-                                    SelectItem::ExprWithAlias { alias, .. } => {
-                                        Some(alias.value.as_str().into())
-                                    }
-                                    SelectItem::QualifiedWildcard(name) => {
-                                        return Err(CodegenError::UnsupportedStatementForm(
-                                            "Qualified wildcards are not supported yet",
-                                            name.to_string(),
-                                        ))
-                                    }
-                                    SelectItem::Wildcard => None,
-                                },
+                            let alias = match projection {
+                                SelectItem::UnnamedExpr(_) => None,
+                                SelectItem::ExprWithAlias { alias, .. } => {
+                                    Some(alias.value.as_str().into())
+                                }
+                                SelectItem::QualifiedWildcard(name) => {
+                                    return Err(CodegenError::UnsupportedStatementForm(
+                                        "Qualified wildcards are not supported yet",
+                                        name.to_string(),
+                                    ))
+                                }
+                                SelectItem::Wildcard => None,
                             };
-                            ctx.instrs.push(projection)
+
+                            match expr_ast {
+                                // an aggregate operation
+                                Some(expr_ast) if is_expr_agg(expr_ast) => match expr_ast {
+                                    ast::Expr::Function(ref f) => codegen_fn_agg(
+                                        expr_ast,
+                                        f,
+                                        alias,
+                                        original_table_reg_index,
+                                        intermediate_reg_index,
+                                        table_reg_index,
+                                        &mut ctx,
+                                    )?,
+                                    _ => {}
+                                },
+                                // a non-aggregate operation
+                                _ => {
+                                    let projection = Instruction::Project {
+                                        input: original_table_reg_index,
+                                        output: table_reg_index,
+                                        expr,
+                                        alias,
+                                    };
+                                    ctx.instrs.push(projection)
+                                }
+                            }
                         }
 
                         if select.distinct {
@@ -570,11 +606,35 @@ fn codegen_expr(expr_ast: ast::Expr, ctx: &mut CodegenContext) -> Result<Expr, E
     }
 }
 
+fn is_fn_name_aggregate(fn_name: &str) -> bool {
+    AGGREGATE_FUNCTIONS.contains(fn_name)
+}
+
+fn is_expr_agg(e: &ast::Expr) -> bool {
+    match e {
+        ast::Expr::Function(ref f) => is_fn_name_aggregate(&f.name.to_string().to_lowercase()),
+        _ => false,
+    }
+}
+
+fn is_projection_agg(p: &SelectItem) -> bool {
+    match p {
+        SelectItem::UnnamedExpr(ref expr) => is_expr_agg(expr),
+        SelectItem::ExprWithAlias { ref expr, .. } => is_expr_agg(expr),
+        SelectItem::QualifiedWildcard(_) => false,
+        SelectItem::Wildcard => false,
+    }
+}
+
 fn codegen_fn_agg(
     expr_ast: &ast::Expr,
     f: &Function,
+    alias: Option<BoundedString>,
+    orig_table_reg: RegisterIndex,
+    intermediate_reg_index: RegisterIndex,
+    output_reg_index: RegisterIndex,
     ctx: &mut CodegenContext,
-) -> Result<(RegisterIndex, Expr), ExprError> {
+) -> Result<(), ExprError> {
     let fn_name = f.name.to_string();
     if AGGREGATE_FUNCTIONS.contains(&fn_name) {
         // TODO: support aggregate functions that take multiple args
@@ -593,21 +653,26 @@ fn codegen_fn_agg(
         }
         ctx.is_inside_agg_fn = true;
 
-        let orig_table_reg = ctx.last_used_reg();
-        let temp_table_reg = ctx.get_and_increment_reg();
         let projected_col_name = ctx.get_new_temp_col();
 
         ctx.instrs.push(Instruction::Project {
             input: orig_table_reg,
-            output: temp_table_reg,
+            output: intermediate_reg_index,
             expr: codegen_fn_arg(&expr_ast, &f.args[0], ctx)?,
             alias: Some(projected_col_name),
         });
 
-        // TODO(now): insert Aggregate instruction here
+        ctx.instrs.push(Instruction::Aggregate {
+            input: intermediate_reg_index,
+            output: output_reg_index,
+            func: AggregateFunction::from_name(fn_name.as_str())?,
+            col_name: projected_col_name,
+            alias,
+        });
 
         ctx.is_inside_agg_fn = false;
     }
+    Ok(())
 }
 
 fn codegen_fn_arg(

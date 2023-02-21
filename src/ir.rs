@@ -68,14 +68,16 @@ pub enum Instruction {
         input: RegisterIndex,
         output: RegisterIndex,
         func: AggregateFunction,
+        /// Column in input to aggregate.
+        col_name: BoundedString,
         #[display(
             "{}",
-            match col_name {
+            match alias {
                 None => "None".to_owned(),
-                Some(col_name) => format!("{}", col_name)
+                Some(alias) => format!("{}", alias)
             }
         )]
-        col_name: Option<BoundedString>,
+        alias: Option<BoundedString>,
     },
 
     /// Group the [`Register::TableRef`](`crate::vm::Register::TableRef`) at `input` by the given expression.
