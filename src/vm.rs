@@ -13,8 +13,8 @@ use crate::codegen::{codegen_ast, CodegenError};
 use crate::column::Column;
 use crate::expr::eval::ExprExecError;
 use crate::expr::Expr;
-use crate::ir::{Instruction, IntermediateCode};
 use crate::identifier::{ColumnRef, TableRef};
+use crate::ir::{Instruction, IntermediateCode};
 use crate::parser::parse;
 use crate::schema::Schema;
 use crate::table::{Row, RowShared, Table};
@@ -329,8 +329,13 @@ impl VirtualMachine {
                 output: _,
                 func: _,
                 col_name: _,
+                alias: _,
             } => todo!("aggregate is not implemented yet"),
-            Instruction::GroupBy { index: _, expr: _ } => todo!("group by is not implemented yet"),
+            Instruction::GroupBy {
+                input: _,
+                output: _,
+                expr: _,
+            } => todo!("group by is not implemented yet"),
             Instruction::Order {
                 index,
                 expr,

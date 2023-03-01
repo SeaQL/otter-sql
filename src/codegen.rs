@@ -347,7 +347,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
 
                         let has_aggs = select.projection.iter().any(|p| is_projection_agg(p));
 
-                        let intermediate_reg_index;
+                        let mut intermediate_reg_index = table_reg_index;
                         if has_aggs {
                             intermediate_reg_index = ctx.get_and_increment_reg();
 
@@ -655,10 +655,11 @@ fn codegen_fn_agg(
 
         let projected_col_name = ctx.get_new_temp_col();
 
+        let expr = codegen_fn_arg(&expr_ast, &f.args[0], ctx)?;
         ctx.instrs.push(Instruction::Project {
             input: orig_table_reg,
             output: intermediate_reg_index,
-            expr: codegen_fn_arg(&expr_ast, &f.args[0], ctx)?,
+            expr,
             alias: Some(projected_col_name),
         });
 
@@ -1406,7 +1407,8 @@ mod tests {
                             },
                         },
                         Instruction::GroupBy {
-                            index: RegisterIndex::default(),
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default().next_index(),
                             expr: Expr::ColumnRef(ColumnRef {
                                 schema_name: None,
                                 table_name: None,
