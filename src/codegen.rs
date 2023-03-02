@@ -110,6 +110,14 @@ static AGGREGATE_FUNCTIONS: Set<&'static str> = phf_set! {
     "sum",
 };
 
+fn extract_expr_ast_from_project(projection: SelectItem) -> Option<ast::Expr> {
+    match projection {
+        SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => Some(expr),
+        SelectItem::QualifiedWildcard(_) => None,
+        SelectItem::Wildcard => None,
+    }
+}
+
 /// Generates intermediate code from the AST.
 pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
     let mut ctx = CodegenContext::default();
@@ -321,20 +329,15 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                     for group_by in select.group_by.clone() {
                         let group_by = codegen_expr(group_by, &mut ctx)?;
                         let grouped_reg_index = ctx.get_and_increment_reg();
+                        ctx.instrs.push(Instruction::Empty {
+                            index: grouped_reg_index,
+                        });
                         ctx.instrs.push(Instruction::GroupBy {
                             input: table_reg_index,
                             output: grouped_reg_index,
                             expr: group_by,
                         });
                         table_reg_index = grouped_reg_index
-                    }
-
-                    if let Some(expr) = select.having.clone() {
-                        let expr = codegen_expr(expr, &mut ctx)?;
-                        ctx.instrs.push(Instruction::Filter {
-                            index: table_reg_index,
-                            expr,
-                        })
                     }
 
                     if !select.projection.is_empty() {
@@ -357,12 +360,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                         }
 
                         for projection in select.projection.clone() {
-                            let expr_ast = match projection {
-                                SelectItem::UnnamedExpr(ref expr)
-                                | SelectItem::ExprWithAlias { ref expr, .. } => Some(expr),
-                                SelectItem::QualifiedWildcard(_) => None,
-                                SelectItem::Wildcard => None,
-                            };
+                            let expr_ast = extract_expr_ast_from_project(projection.clone());
 
                             let expr = match projection {
                                 SelectItem::UnnamedExpr(ref expr) => {
@@ -391,9 +389,9 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
 
                             match expr_ast {
                                 // an aggregate operation
-                                Some(expr_ast) if is_expr_agg(expr_ast) => match expr_ast {
+                                Some(expr_ast) if is_expr_agg(&expr_ast) => match expr_ast {
                                     ast::Expr::Function(ref f) => codegen_fn_agg(
-                                        expr_ast,
+                                        &expr_ast,
                                         f,
                                         alias,
                                         original_table_reg_index,
@@ -422,6 +420,14 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                                 select.to_string(),
                             ));
                         }
+                    }
+
+                    if let Some(expr) = select.having.clone() {
+                        let expr = codegen_expr(expr, &mut ctx)?;
+                        ctx.instrs.push(Instruction::Filter {
+                            index: table_reg_index,
+                            expr,
+                        })
                     }
                 }
                 SetExpr::Values(exprs) => {
@@ -635,7 +641,7 @@ fn codegen_fn_agg(
     output_reg_index: RegisterIndex,
     ctx: &mut CodegenContext,
 ) -> Result<(), ExprError> {
-    let fn_name = f.name.to_string();
+    let fn_name = f.name.to_string().to_lowercase();
     if AGGREGATE_FUNCTIONS.contains(&fn_name) {
         // TODO: support aggregate functions that take multiple args
         if f.args.len() != 1 {
@@ -742,7 +748,7 @@ impl From<ValueError> for CodegenError {
 impl Error for CodegenError {}
 
 #[cfg(test)]
-mod tests {
+mod codegen_tests {
     use sqlparser::ast::{ColumnOption, ColumnOptionDef, DataType};
 
     use pretty_assertions::assert_eq;
@@ -1462,6 +1468,492 @@ mod tests {
                     ]
                 )
             },
+        );
+    }
+}
+
+#[cfg(test)]
+mod expr_codegen_tests {
+    use sqlparser::{ast, dialect::GenericDialect, parser::Parser, tokenizer::Tokenizer};
+
+    use crate::{
+        codegen::{codegen_expr, CodegenContext},
+        expr::{BinOp, Expr, ExprError, UnOp},
+        identifier::ColumnRef,
+        value::Value,
+    };
+
+    #[test]
+    fn conversion_from_ast() {
+        fn parse_expr(s: &str) -> ast::Expr {
+            let dialect = GenericDialect {};
+            let mut tokenizer = Tokenizer::new(&dialect, s);
+            let tokens = tokenizer.tokenize().unwrap();
+            let mut parser = Parser::new(tokens, &dialect);
+            parser.parse_expr().unwrap()
+        }
+
+        fn codegen_expr_wrapper(expr_ast: ast::Expr) -> Result<Expr, ExprError> {
+            let mut ctx = CodegenContext::new();
+            codegen_expr(expr_ast, &mut ctx)
+        }
+
+        assert_eq!(
+            codegen_expr_wrapper(parse_expr("abc")),
+            Ok(Expr::ColumnRef(ColumnRef {
+                schema_name: None,
+                table_name: None,
+                col_name: "abc".into()
+            }))
+        );
+
+        assert_ne!(
+            codegen_expr_wrapper(parse_expr("abc")),
+            Ok(Expr::ColumnRef(ColumnRef {
+                schema_name: None,
+                table_name: None,
+                col_name: "cab".into()
+            }))
+        );
+
+        assert_eq!(
+            codegen_expr_wrapper(parse_expr("table1.col1")),
+            Ok(Expr::ColumnRef(ColumnRef {
+                schema_name: None,
+                table_name: Some("table1".into()),
+                col_name: "col1".into()
+            }))
+        );
+
+        assert_eq!(
+            codegen_expr_wrapper(parse_expr("schema1.table1.col1")),
+            Ok(Expr::ColumnRef(ColumnRef {
+                schema_name: Some("schema1".into()),
+                table_name: Some("table1".into()),
+                col_name: "col1".into()
+            }))
+        );
+
+        assert_eq!(
+            codegen_expr_wrapper(parse_expr("5 IS NULL")),
+            Ok(Expr::Unary {
+                op: UnOp::IsNull,
+                operand: Box::new(Expr::Value(Value::Int64(5)))
+            })
+        );
+
+        assert_eq!(
+            codegen_expr_wrapper(parse_expr("1 IS TRUE")),
+            Ok(Expr::Unary {
+                op: UnOp::IsTrue,
+                operand: Box::new(Expr::Value(Value::Int64(1)))
+            })
+        );
+
+        assert_eq!(
+            codegen_expr_wrapper(parse_expr("4 BETWEEN 3 AND 5")),
+            Ok(Expr::Binary {
+                left: Box::new(Expr::Binary {
+                    left: Box::new(Expr::Value(Value::Int64(3))),
+                    op: BinOp::LessThanOrEqual,
+                    right: Box::new(Expr::Value(Value::Int64(4)))
+                }),
+                op: BinOp::And,
+                right: Box::new(Expr::Binary {
+                    left: Box::new(Expr::Value(Value::Int64(4))),
+                    op: BinOp::LessThanOrEqual,
+                    right: Box::new(Expr::Value(Value::Int64(5)))
+                })
+            })
+        );
+
+        assert_eq!(
+            codegen_expr_wrapper(parse_expr("4 NOT BETWEEN 3 AND 5")),
+            Ok(Expr::Unary {
+                op: UnOp::Not,
+                operand: Box::new(Expr::Binary {
+                    left: Box::new(Expr::Binary {
+                        left: Box::new(Expr::Value(Value::Int64(3))),
+                        op: BinOp::LessThanOrEqual,
+                        right: Box::new(Expr::Value(Value::Int64(4)))
+                    }),
+                    op: BinOp::And,
+                    right: Box::new(Expr::Binary {
+                        left: Box::new(Expr::Value(Value::Int64(4))),
+                        op: BinOp::LessThanOrEqual,
+                        right: Box::new(Expr::Value(Value::Int64(5)))
+                    })
+                })
+            })
+        );
+
+        assert_eq!(
+            codegen_expr_wrapper(parse_expr("MAX(col1)")),
+            Ok(Expr::Function {
+                name: "MAX".into(),
+                args: vec![Expr::ColumnRef(ColumnRef {
+                    schema_name: None,
+                    table_name: None,
+                    col_name: "col1".into()
+                })]
+            })
+        );
+
+        assert_eq!(
+            codegen_expr_wrapper(parse_expr("some_func(col1, 1, 'abc')")),
+            Ok(Expr::Function {
+                name: "some_func".into(),
+                args: vec![
+                    Expr::ColumnRef(ColumnRef {
+                        schema_name: None,
+                        table_name: None,
+                        col_name: "col1".into()
+                    }),
+                    Expr::Value(Value::Int64(1)),
+                    Expr::Value(Value::String("abc".to_owned()))
+                ]
+            })
+        );
+
+        assert_eq!(
+            codegen_expr_wrapper(parse_expr("COUNT(*)")),
+            Ok(Expr::Function {
+                name: "COUNT".into(),
+                args: vec![Expr::Wildcard]
+            })
+        );
+    }
+}
+
+#[cfg(test)]
+mod expr_eval_tests {
+    use sqlparser::{
+        ast::{ColumnOption, ColumnOptionDef, DataType},
+        dialect::GenericDialect,
+        parser::Parser,
+        tokenizer::Tokenizer,
+    };
+
+    use crate::{
+        column::Column,
+        expr::{eval::ExprExecError, BinOp, Expr, UnOp},
+        table::{Row, Table},
+        value::{Value, ValueBinaryOpError, ValueUnaryOpError},
+    };
+
+    use super::{codegen_expr, CodegenContext};
+
+    fn str_to_expr(s: &str) -> Expr {
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, s);
+        let tokens = tokenizer.tokenize().unwrap();
+        let mut parser = Parser::new(tokens, &dialect);
+        let mut ctx = CodegenContext::new();
+        codegen_expr(parser.parse_expr().unwrap(), &mut ctx).unwrap()
+    }
+
+    fn exec_expr_no_context(expr: Expr) -> Result<Value, ExprExecError> {
+        let mut table = Table::new_temp(0);
+        table.new_row(vec![]);
+        Expr::execute(&expr, &table, table.all_data()[0].to_shared())
+    }
+
+    fn exec_str_no_context(s: &str) -> Result<Value, ExprExecError> {
+        let expr = str_to_expr(s);
+        exec_expr_no_context(expr)
+    }
+
+    fn exec_str_with_context(s: &str, table: &Table, row: &Row) -> Result<Value, ExprExecError> {
+        let expr = str_to_expr(s);
+        Expr::execute(&expr, table, row.to_shared())
+    }
+
+    #[test]
+    fn exec_value() {
+        assert_eq!(exec_str_no_context("NULL"), Ok(Value::Null));
+
+        assert_eq!(exec_str_no_context("true"), Ok(Value::Bool(true)));
+
+        assert_eq!(exec_str_no_context("1"), Ok(Value::Int64(1)));
+
+        assert_eq!(exec_str_no_context("1.1"), Ok(Value::Float64(1.1.into())));
+
+        assert_eq!(exec_str_no_context(".1"), Ok(Value::Float64(0.1.into())));
+
+        assert_eq!(
+            exec_str_no_context("'str'"),
+            Ok(Value::String("str".to_owned()))
+        );
+    }
+
+    #[test]
+    fn exec_logical() {
+        assert_eq!(exec_str_no_context("true and true"), Ok(Value::Bool(true)));
+        assert_eq!(
+            exec_str_no_context("true and false"),
+            Ok(Value::Bool(false))
+        );
+        assert_eq!(
+            exec_str_no_context("false and true"),
+            Ok(Value::Bool(false))
+        );
+        assert_eq!(
+            exec_str_no_context("false and false"),
+            Ok(Value::Bool(false))
+        );
+        assert_eq!(
+            exec_str_no_context("false and 10"),
+            Err(ValueBinaryOpError {
+                operator: BinOp::And,
+                values: (Value::Bool(false), Value::Int64(10))
+            }
+            .into())
+        );
+        assert_eq!(
+            exec_str_no_context("10 and false"),
+            Err(ValueBinaryOpError {
+                operator: BinOp::And,
+                values: (Value::Int64(10), Value::Bool(false))
+            }
+            .into())
+        );
+
+        assert_eq!(exec_str_no_context("true or true"), Ok(Value::Bool(true)));
+        assert_eq!(exec_str_no_context("true or false"), Ok(Value::Bool(true)));
+        assert_eq!(exec_str_no_context("false or true"), Ok(Value::Bool(true)));
+        assert_eq!(
+            exec_str_no_context("false or false"),
+            Ok(Value::Bool(false))
+        );
+        assert_eq!(
+            exec_str_no_context("true or 10"),
+            Err(ValueBinaryOpError {
+                operator: BinOp::Or,
+                values: (Value::Bool(true), Value::Int64(10))
+            }
+            .into())
+        );
+        assert_eq!(
+            exec_str_no_context("10 or true"),
+            Err(ValueBinaryOpError {
+                operator: BinOp::Or,
+                values: (Value::Int64(10), Value::Bool(true))
+            }
+            .into())
+        );
+    }
+
+    #[test]
+    fn exec_arithmetic() {
+        assert_eq!(exec_str_no_context("1 + 1"), Ok(Value::Int64(2)));
+        assert_eq!(
+            exec_str_no_context("1.1 + 1.1"),
+            Ok(Value::Float64(2.2.into()))
+        );
+
+        // this applies to all binary ops
+        assert_eq!(
+            exec_str_no_context("1 + 1.1"),
+            Err(ValueBinaryOpError {
+                operator: BinOp::Plus,
+                values: (Value::Int64(1), Value::Float64(1.1.into()))
+            }
+            .into())
+        );
+
+        assert_eq!(exec_str_no_context("4 - 2"), Ok(Value::Int64(2)));
+        assert_eq!(exec_str_no_context("4 - 6"), Ok(Value::Int64(-2)));
+        assert_eq!(
+            exec_str_no_context("4.5 - 2.2"),
+            Ok(Value::Float64(2.3.into()))
+        );
+
+        assert_eq!(exec_str_no_context("4 * 2"), Ok(Value::Int64(8)));
+        assert_eq!(
+            exec_str_no_context("0.5 * 2.2"),
+            Ok(Value::Float64(1.1.into()))
+        );
+
+        assert_eq!(exec_str_no_context("4 / 2"), Ok(Value::Int64(2)));
+        assert_eq!(exec_str_no_context("4 / 3"), Ok(Value::Int64(1)));
+        assert_eq!(
+            exec_str_no_context("4.0 / 2.0"),
+            Ok(Value::Float64(2.0.into()))
+        );
+        assert_eq!(
+            exec_str_no_context("5.1 / 2.5"),
+            Ok(Value::Float64(2.04.into()))
+        );
+
+        assert_eq!(exec_str_no_context("5 % 2"), Ok(Value::Int64(1)));
+        assert_eq!(
+            exec_str_no_context("5.5 % 2.5"),
+            Ok(Value::Float64(0.5.into()))
+        );
+    }
+
+    #[test]
+    fn exec_comparison() {
+        assert_eq!(exec_str_no_context("1 = 1"), Ok(Value::Bool(true)));
+        assert_eq!(exec_str_no_context("1 = 2"), Ok(Value::Bool(false)));
+        assert_eq!(exec_str_no_context("1 != 2"), Ok(Value::Bool(true)));
+        assert_eq!(exec_str_no_context("1.1 = 1.1"), Ok(Value::Bool(true)));
+        assert_eq!(exec_str_no_context("1.2 = 1.22"), Ok(Value::Bool(false)));
+        assert_eq!(exec_str_no_context("1.2 != 1.22"), Ok(Value::Bool(true)));
+
+        assert_eq!(exec_str_no_context("1 < 2"), Ok(Value::Bool(true)));
+        assert_eq!(exec_str_no_context("1 < 1"), Ok(Value::Bool(false)));
+        assert_eq!(exec_str_no_context("1 <= 2"), Ok(Value::Bool(true)));
+        assert_eq!(exec_str_no_context("1 <= 1"), Ok(Value::Bool(true)));
+        assert_eq!(exec_str_no_context("3 > 2"), Ok(Value::Bool(true)));
+        assert_eq!(exec_str_no_context("3 > 3"), Ok(Value::Bool(false)));
+        assert_eq!(exec_str_no_context("3 >= 2"), Ok(Value::Bool(true)));
+        assert_eq!(exec_str_no_context("3 >= 3"), Ok(Value::Bool(true)));
+    }
+
+    #[test]
+    fn exec_pattern_match() {
+        assert_eq!(
+            exec_str_no_context("'my name is yoshikage kira' LIKE 'kira'"),
+            Ok(Value::Bool(true))
+        );
+        assert_eq!(
+            exec_str_no_context("'my name is yoshikage kira' LIKE 'KIRA'"),
+            Ok(Value::Bool(false))
+        );
+        assert_eq!(
+            exec_str_no_context("'my name is yoshikage kira' LIKE 'kira yoshikage'"),
+            Ok(Value::Bool(false))
+        );
+
+        assert_eq!(
+            exec_str_no_context("'my name is Yoshikage Kira' ILIKE 'kira'"),
+            Ok(Value::Bool(true))
+        );
+        assert_eq!(
+            exec_str_no_context("'my name is Yoshikage Kira' ILIKE 'KIRA'"),
+            Ok(Value::Bool(true))
+        );
+        assert_eq!(
+            exec_str_no_context("'my name is Yoshikage Kira' ILIKE 'KIRAA'"),
+            Ok(Value::Bool(false))
+        );
+    }
+
+    #[test]
+    fn exec_unary() {
+        assert_eq!(exec_str_no_context("+1"), Ok(Value::Int64(1)));
+        assert_eq!(exec_str_no_context("+ -1"), Ok(Value::Int64(-1)));
+        assert_eq!(exec_str_no_context("-1"), Ok(Value::Int64(-1)));
+        assert_eq!(exec_str_no_context("- -1"), Ok(Value::Int64(1)));
+        assert_eq!(exec_str_no_context("not true"), Ok(Value::Bool(false)));
+        assert_eq!(exec_str_no_context("not false"), Ok(Value::Bool(true)));
+
+        assert_eq!(exec_str_no_context("true is true"), Ok(Value::Bool(true)));
+        assert_eq!(exec_str_no_context("false is false"), Ok(Value::Bool(true)));
+        assert_eq!(exec_str_no_context("false is true"), Ok(Value::Bool(false)));
+        assert_eq!(exec_str_no_context("true is false"), Ok(Value::Bool(false)));
+        assert_eq!(
+            exec_str_no_context("1 is true"),
+            Err(ValueUnaryOpError {
+                operator: UnOp::IsTrue,
+                value: Value::Int64(1)
+            }
+            .into())
+        );
+
+        assert_eq!(exec_str_no_context("NULL is NULL"), Ok(Value::Bool(true)));
+        assert_eq!(
+            exec_str_no_context("NULL is not NULL"),
+            Ok(Value::Bool(false))
+        );
+        assert_eq!(exec_str_no_context("1 is NULL"), Ok(Value::Bool(false)));
+        assert_eq!(exec_str_no_context("1 is not NULL"), Ok(Value::Bool(true)));
+        assert_eq!(exec_str_no_context("0 is not NULL"), Ok(Value::Bool(true)));
+        assert_eq!(exec_str_no_context("'' is not NULL"), Ok(Value::Bool(true)));
+    }
+
+    #[test]
+    fn exec_wildcard() {
+        assert_eq!(
+            exec_expr_no_context(Expr::Wildcard),
+            Err(ExprExecError::CannotExecute(Expr::Wildcard))
+        );
+    }
+
+    #[test]
+    fn exec_column_ref() {
+        let mut table = Table::new(
+            "table1".into(),
+            vec![
+                Column::new(
+                    "col1".into(),
+                    DataType::Int(None),
+                    vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::Unique { is_primary: true },
+                    }],
+                    false,
+                ),
+                Column::new(
+                    "col2".into(),
+                    DataType::Int(None),
+                    vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::Unique { is_primary: false },
+                    }],
+                    false,
+                ),
+                Column::new("col3".into(), DataType::String, vec![], false),
+            ],
+        );
+        table.new_row(vec![
+            Value::Int64(4),
+            Value::Int64(10),
+            Value::String("brr".to_owned()),
+        ]);
+
+        assert_eq!(
+            table.all_data(),
+            vec![Row::new(vec![
+                Value::Int64(4),
+                Value::Int64(10),
+                Value::String("brr".to_owned())
+            ])]
+        );
+
+        assert_eq!(
+            exec_str_with_context("col1", &table, &table.all_data()[0]),
+            Ok(Value::Int64(4))
+        );
+
+        assert_eq!(
+            exec_str_with_context("col3", &table, &table.all_data()[0]),
+            Ok(Value::String("brr".to_owned()))
+        );
+
+        assert_eq!(
+            exec_str_with_context("col1 = 4", &table, &table.all_data()[0]),
+            Ok(Value::Bool(true))
+        );
+
+        assert_eq!(
+            exec_str_with_context("col1 + 1", &table, &table.all_data()[0]),
+            Ok(Value::Int64(5))
+        );
+
+        assert_eq!(
+            exec_str_with_context("col1 + col2", &table, &table.all_data()[0]),
+            Ok(Value::Int64(14))
+        );
+
+        assert_eq!(
+            exec_str_with_context(
+                "col1 + col2 = 10 or col1 * col2 = 40",
+                &table,
+                &table.all_data()[0]
+            ),
+            Ok(Value::Bool(true))
         );
     }
 }

@@ -1,4 +1,5 @@
 use super::ExprError;
+use std::fmt::Display;
 
 #[derive(Clone, PartialEq, Eq)]
 /// Functions that reduce an entire column to a single value.
@@ -17,5 +18,19 @@ impl AggregateFunction {
             "sum" => Ok(Self::Sum),
             _ => Err(ExprError::UnknownAggregateFunction(name.to_owned())),
         }
+    }
+}
+
+impl Display for AggregateFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Agg({})",
+            match self {
+                AggregateFunction::Count => "count",
+                AggregateFunction::Max => "max",
+                AggregateFunction::Sum => "sum",
+            }
+        )
     }
 }
