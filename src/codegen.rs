@@ -748,7 +748,7 @@ mod codegen_tests {
 
     use crate::{
         codegen::codegen_ast,
-        expr::{BinOp, Expr},
+        expr::{agg::AggregateFunction, BinOp, Expr},
         identifier::{ColumnRef, SchemaRef, TableRef},
         ir::Instruction,
         parser::parse,
@@ -1380,7 +1380,7 @@ mod codegen_tests {
             FROM table1
             WHERE col1 = 1
             GROUP BY col2
-            HAVING MAX(col3) > 10
+            HAVING max_col3 > 10
             ",
             |instrs| {
                 assert_eq!(
@@ -1405,30 +1405,6 @@ mod codegen_tests {
                                 right: Box::new(Expr::Value(Value::Int64(1)))
                             },
                         },
-                        Instruction::GroupBy {
-                            input: RegisterIndex::default(),
-                            output: RegisterIndex::default().next_index(),
-                            expr: Expr::ColumnRef(ColumnRef {
-                                schema_name: None,
-                                table_name: None,
-                                col_name: "col2".into(),
-                            })
-                        },
-                        Instruction::Filter {
-                            index: RegisterIndex::default(),
-                            expr: Expr::Binary {
-                                left: Box::new(Expr::Function {
-                                    name: "MAX".into(),
-                                    args: vec![Expr::ColumnRef(ColumnRef {
-                                        schema_name: None,
-                                        table_name: None,
-                                        col_name: "col3".into(),
-                                    })]
-                                }),
-                                op: BinOp::GreaterThan,
-                                right: Box::new(Expr::Value(Value::Int64(10)))
-                            },
-                        },
                         Instruction::Empty {
                             index: RegisterIndex::default().next_index()
                         },
@@ -1445,18 +1421,61 @@ mod codegen_tests {
                         Instruction::Project {
                             input: RegisterIndex::default(),
                             output: RegisterIndex::default().next_index(),
-                            expr: Expr::Function {
-                                name: "MAX".into(),
-                                args: vec![Expr::ColumnRef(ColumnRef {
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col3".into(),
+                            }),
+                            alias: Some("__otter_temp_col_1".into())
+                        },
+                        Instruction::Empty {
+                            index: RegisterIndex::default().next_index().next_index()
+                        },
+                        Instruction::GroupBy {
+                            input: RegisterIndex::default().next_index(),
+                            output: RegisterIndex::default().next_index().next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col2".into(),
+                            })
+                        },
+                        Instruction::Empty {
+                            index: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                        },
+                        Instruction::Aggregate {
+                            input: RegisterIndex::default().next_index().next_index(),
+                            output: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            func: AggregateFunction::Max,
+                            col_name: "__otter_temp_col_1".into(),
+                            alias: Some("max_col3".into()),
+                        },
+                        Instruction::Filter {
+                            index: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            expr: Expr::Binary {
+                                left: Box::new(Expr::ColumnRef(ColumnRef {
                                     schema_name: None,
                                     table_name: None,
-                                    col_name: "col3".into(),
-                                })]
+                                    col_name: "max_col3".into(),
+                                })),
+                                op: BinOp::GreaterThan,
+                                right: Box::new(Expr::Value(Value::Int64(10)))
                             },
-                            alias: Some("max_col3".into())
                         },
                         Instruction::Return {
-                            index: RegisterIndex::default().next_index(),
+                            index: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
                         }
                     ]
                 )
