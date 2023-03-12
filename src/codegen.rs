@@ -349,58 +349,53 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                     let pre_grouped_reg_index = table_reg_index;
                     let mut agg_intermediate_cols = Vec::new();
                     if !select.projection.is_empty() {
-                        let has_aggs = select.projection.iter().any(|p| is_projection_agg(p));
+                        let grouped_reg_index = ctx.get_and_increment_reg();
+                        ctx.instrs.push(Instruction::Empty {
+                            index: grouped_reg_index,
+                        });
 
-                        if has_aggs {
-                            let grouped_reg_index = ctx.get_and_increment_reg();
-                            ctx.instrs.push(Instruction::Empty {
-                                index: grouped_reg_index,
-                            });
+                        table_reg_index = grouped_reg_index;
 
-                            table_reg_index = grouped_reg_index;
+                        for projection in &select.projection {
+                            let alias = extract_alias_from_project(&projection)?;
 
-                            for projection in &select.projection {
-                                let alias = extract_alias_from_project(&projection)?;
+                            let expr_ast = extract_expr_ast_from_project(projection.clone());
 
-                                let expr_ast = extract_expr_ast_from_project(projection.clone());
-
-                                match expr_ast {
-                                    // an aggregate operation
-                                    Some(expr_ast) if is_expr_agg(&expr_ast) => match expr_ast {
-                                        ast::Expr::Function(ref f) => {
-                                            let expr =
-                                                codegen_fn_arg(&expr_ast, &f.args[0], &mut ctx)?;
-                                            let projected_col_name = ctx.get_new_temp_col();
-                                            agg_intermediate_cols.push(projected_col_name);
-                                            ctx.instrs.push(Instruction::Project {
-                                                input: pre_grouped_reg_index,
-                                                output: grouped_reg_index,
-                                                expr,
-                                                alias: Some(projected_col_name),
-                                            });
-                                        }
-                                        _ => {}
-                                    },
-                                    // a non-aggregate operation
-                                    _ => {
-                                        let expr = match projection {
-                                            SelectItem::UnnamedExpr(ref expr) => {
-                                                codegen_expr(expr.clone(), &mut ctx)?
-                                            }
-                                            SelectItem::ExprWithAlias { ref expr, .. } => {
-                                                codegen_expr(expr.clone(), &mut ctx)?
-                                            }
-                                            SelectItem::QualifiedWildcard(_) => Expr::Wildcard,
-                                            SelectItem::Wildcard => Expr::Wildcard,
-                                        };
-                                        let projection = Instruction::Project {
+                            match expr_ast {
+                                // an aggregate operation
+                                Some(expr_ast) if is_expr_agg(&expr_ast) => match expr_ast {
+                                    ast::Expr::Function(ref f) => {
+                                        let expr = codegen_fn_arg(&expr_ast, &f.args[0], &mut ctx)?;
+                                        let projected_col_name = ctx.get_new_temp_col();
+                                        agg_intermediate_cols.push(projected_col_name);
+                                        ctx.instrs.push(Instruction::Project {
                                             input: pre_grouped_reg_index,
                                             output: grouped_reg_index,
                                             expr,
-                                            alias,
-                                        };
-                                        ctx.instrs.push(projection)
+                                            alias: Some(projected_col_name),
+                                        });
                                     }
+                                    _ => {}
+                                },
+                                // a non-aggregate operation
+                                _ => {
+                                    let expr = match projection {
+                                        SelectItem::UnnamedExpr(ref expr) => {
+                                            codegen_expr(expr.clone(), &mut ctx)?
+                                        }
+                                        SelectItem::ExprWithAlias { ref expr, .. } => {
+                                            codegen_expr(expr.clone(), &mut ctx)?
+                                        }
+                                        SelectItem::QualifiedWildcard(_) => Expr::Wildcard,
+                                        SelectItem::Wildcard => Expr::Wildcard,
+                                    };
+                                    let projection = Instruction::Project {
+                                        input: pre_grouped_reg_index,
+                                        output: grouped_reg_index,
+                                        expr,
+                                        alias,
+                                    };
+                                    ctx.instrs.push(projection)
                                 }
                             }
                         }
@@ -424,16 +419,16 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                     // aggs are applied on the grouped table created by the `GroupBy` instructions
                     // generated above.
                     if !select.projection.is_empty() {
-                        let original_table_reg_index = table_reg_index;
-                        table_reg_index = ctx.get_and_increment_reg();
-
-                        ctx.instrs.push(Instruction::Empty {
-                            index: table_reg_index,
-                        });
-
                         let has_aggs = select.projection.iter().any(|p| is_projection_agg(p));
 
                         if has_aggs {
+                            let original_table_reg_index = table_reg_index;
+                            table_reg_index = ctx.get_and_increment_reg();
+
+                            ctx.instrs.push(Instruction::Empty {
+                                index: table_reg_index,
+                            });
+
                             let mut agg_index = 0;
                             for projection in &select.projection {
                                 let alias = extract_alias_from_project(&projection)?;
