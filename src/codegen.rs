@@ -1,8 +1,6 @@
 //! Intermediate code generation from the AST.
 use sqlparser::{
-    ast::{
-        self, Function, FunctionArg, SelectItem, SetExpr, Statement, TableFactor, TableWithJoins,
-    },
+    ast::{self, FunctionArg, SelectItem, SetExpr, Statement, TableFactor, TableWithJoins},
     parser::ParserError,
 };
 
@@ -675,56 +673,6 @@ fn is_projection_agg(p: &SelectItem) -> bool {
         SelectItem::QualifiedWildcard(_) => false,
         SelectItem::Wildcard => false,
     }
-}
-
-fn codegen_fn_agg(
-    expr_ast: &ast::Expr,
-    f: &Function,
-    alias: Option<BoundedString>,
-    orig_table_reg: RegisterIndex,
-    intermediate_reg_index: RegisterIndex,
-    output_reg_index: RegisterIndex,
-    ctx: &mut CodegenContext,
-) -> Result<(), ExprError> {
-    let fn_name = f.name.to_string().to_lowercase();
-    if AGGREGATE_FUNCTIONS.contains(&fn_name) {
-        // TODO: support aggregate functions that take multiple args
-        if f.args.len() != 1 {
-            return Err(ExprError::Expr {
-                        reason: "Aggregate functions that take more or less than one argument are not supported yet",
-                        expr: expr_ast.clone(),
-                    });
-        }
-
-        if ctx.is_inside_agg_fn {
-            return Err(ExprError::Expr {
-                reason: "Aggregate functions cannot be nested",
-                expr: expr_ast.clone(),
-            });
-        }
-        ctx.is_inside_agg_fn = true;
-
-        let projected_col_name = ctx.get_new_temp_col();
-
-        let expr = codegen_fn_arg(&expr_ast, &f.args[0], ctx)?;
-        ctx.instrs.push(Instruction::Project {
-            input: orig_table_reg,
-            output: intermediate_reg_index,
-            expr,
-            alias: Some(projected_col_name),
-        });
-
-        ctx.instrs.push(Instruction::Aggregate {
-            input: intermediate_reg_index,
-            output: output_reg_index,
-            func: AggregateFunction::from_name(fn_name.as_str())?,
-            col_name: projected_col_name,
-            alias,
-        });
-
-        ctx.is_inside_agg_fn = false;
-    }
-    Ok(())
 }
 
 fn codegen_fn_arg(
