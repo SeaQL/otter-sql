@@ -64,7 +64,6 @@ struct CodegenContext {
     pub instrs: Vec<Instruction>,
     current_reg: RegisterIndex,
     last_temp_col_num: usize,
-    is_inside_agg_fn: bool,
 }
 
 impl CodegenContext {
@@ -73,7 +72,6 @@ impl CodegenContext {
             instrs: Vec::new(),
             current_reg: RegisterIndex::default(),
             last_temp_col_num: 0,
-            is_inside_agg_fn: false,
         }
     }
 
