@@ -1479,6 +1479,139 @@ mod codegen_tests {
                 )
             },
         );
+
+        check_single_statement(
+            "SELECT col2, col3, SUM(col4 * col4) AS sos
+            FROM table1
+            WHERE col1 = 1
+            GROUP BY col2, col3
+            ",
+            |instrs| {
+                assert_eq!(
+                    &[
+                        Instruction::Source {
+                            index: RegisterIndex::default(),
+                            name: TableRef {
+                                schema_name: None,
+                                table_name: "table1".into()
+                            }
+                        },
+                        Instruction::Filter {
+                            index: RegisterIndex::default(),
+                            expr: Expr::Binary {
+                                left: Box::new(Expr::ColumnRef(ColumnRef {
+                                    schema_name: None,
+                                    table_name: None,
+                                    col_name: "col1".into(),
+                                },)),
+                                op: BinOp::Equal,
+                                right: Box::new(Expr::Value(Value::Int64(1)))
+                            },
+                        },
+                        Instruction::Empty {
+                            index: RegisterIndex::default().next_index()
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default().next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col2".into(),
+                            }),
+                            alias: None
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default().next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col3".into(),
+                            }),
+                            alias: None
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default().next_index(),
+                            expr: Expr::Binary {
+                                left: Box::new(Expr::ColumnRef(ColumnRef {
+                                    schema_name: None,
+                                    table_name: None,
+                                    col_name: "col4".into(),
+                                })),
+                                op: BinOp::Multiply,
+                                right: Box::new(Expr::ColumnRef(ColumnRef {
+                                    schema_name: None,
+                                    table_name: None,
+                                    col_name: "col4".into(),
+                                }))
+                            },
+                            alias: Some("__otter_temp_col_1".into())
+                        },
+                        Instruction::Empty {
+                            index: RegisterIndex::default().next_index().next_index()
+                        },
+                        Instruction::GroupBy {
+                            input: RegisterIndex::default().next_index(),
+                            output: RegisterIndex::default().next_index().next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col2".into(),
+                            })
+                        },
+                        Instruction::Empty {
+                            index: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                        },
+                        Instruction::GroupBy {
+                            input: RegisterIndex::default().next_index().next_index(),
+                            output: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col3".into(),
+                            })
+                        },
+                        Instruction::Empty {
+                            index: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                        },
+                        Instruction::Aggregate {
+                            input: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            output: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            func: AggregateFunction::Sum,
+                            col_name: "__otter_temp_col_1".into(),
+                            alias: Some("sos".into()),
+                        },
+                        Instruction::Return {
+                            index: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                        }
+                    ],
+                    instrs
+                )
+            },
+        );
     }
 }
 
