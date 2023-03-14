@@ -1,7 +1,7 @@
 use super::ExprError;
 use std::fmt::Display;
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// Functions that reduce an entire column to a single value.
 pub enum AggregateFunction {
     Count,
