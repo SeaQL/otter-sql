@@ -464,6 +464,16 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                     }
 
                     if let Some(expr) = select.having.clone() {
+                        if is_expr_agg(&expr) {
+                            return Err(CodegenError::UnsupportedStatementForm(
+                                concat!(
+                                    "HAVING clause does not support inline aggregations.",
+                                    " Select the expression `AS some_col_name` ",
+                                    "and then use `HAVING` on `some_col_name`."
+                                ),
+                                select.to_string(),
+                            ));
+                        }
                         let expr = codegen_expr(expr, &mut ctx)?;
                         ctx.instrs.push(Instruction::Filter {
                             index: table_reg_index,
