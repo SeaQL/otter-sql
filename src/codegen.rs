@@ -584,36 +584,114 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
     Ok(IntermediateCode { instrs: ctx.instrs })
 }
 
-fn codegen_expr(expr_ast: ast::Expr, ctx: &mut CodegenContext) -> Result<Expr, ExprError> {
+#[derive(Debug)]
+struct IntermediateExprAgg {
+    pub pre_agg: Vec<(Expr, BoundedString)>,
+    pub agg: Vec<(AggregateFunction, BoundedString, BoundedString)>,
+    pub post_agg: Vec<Expr>,
+    last_alias: Option<BoundedString>,
+    last_expr: (Expr, BoundedString),
+}
+
+#[derive(Debug)]
+enum IntermediateExpr {
+    NonAgg(Expr),
+    Agg(IntermediateExprAgg),
+}
+
+impl IntermediateExpr {
+    pub fn new_non_agg(expr: Expr) -> Self {
+        Self::NonAgg(expr)
+    }
+
+    /// The last expression that was generated.
+    pub fn last_expr(&self) -> &Expr {
+        match self {
+            Self::NonAgg(e) => e,
+            Self::Agg(agg) => &agg.last_expr.0,
+        }
+    }
+
+    pub fn combine(self, new: IntermediateExpr) -> Self {
+        match self {
+            Self::NonAgg(sel) => new,
+            Self::Agg(sel) => match new {
+                Self::NonAgg(new) => {
+                    // TODO: last_expr may need updating here?
+                    if sel.post_agg.len() <= 1 {
+                        sel.post_agg = vec![new];
+                    } else {
+                        *sel.post_agg.last_mut().unwrap() = new;
+                    }
+                    Self::Agg(sel)
+                }
+                Self::Agg(new) => {
+                    // TODO: last_expr may need updating here?
+                    sel.pre_agg.extend_from_slice(&new.pre_agg);
+                    sel.agg.extend_from_slice(&new.agg);
+                    sel.post_agg.extend_from_slice(&new.post_agg);
+                    Self::Agg(sel)
+                }
+            },
+        }
+    }
+}
+
+fn codegen_expr(
+    expr_ast: ast::Expr,
+    ctx: &mut CodegenContext,
+) -> Result<IntermediateExpr, ExprError> {
     match expr_ast {
-        ast::Expr::Identifier(i) => Ok(Expr::ColumnRef(vec![i].try_into()?)),
-        ast::Expr::CompoundIdentifier(i) => Ok(Expr::ColumnRef(i.try_into()?)),
-        ast::Expr::IsFalse(e) => Ok(Expr::Unary {
-            op: UnOp::IsFalse,
-            operand: Box::new(codegen_expr(*e, ctx)?),
-        }),
-        ast::Expr::IsTrue(e) => Ok(Expr::Unary {
-            op: UnOp::IsTrue,
-            operand: Box::new(codegen_expr(*e, ctx)?),
-        }),
-        ast::Expr::IsNull(e) => Ok(Expr::Unary {
-            op: UnOp::IsNull,
-            operand: Box::new(codegen_expr(*e, ctx)?),
-        }),
-        ast::Expr::IsNotNull(e) => Ok(Expr::Unary {
-            op: UnOp::IsNotNull,
-            operand: Box::new(codegen_expr(*e, ctx)?),
-        }),
+        ast::Expr::Identifier(i) => Ok(IntermediateExpr::new_non_agg(Expr::ColumnRef(
+            vec![i].try_into()?,
+        ))),
+        ast::Expr::CompoundIdentifier(i) => Ok(IntermediateExpr::new_non_agg(Expr::ColumnRef(
+            i.try_into()?,
+        ))),
+        ast::Expr::IsFalse(e) => {
+            let inner = codegen_expr(*e, ctx)?;
+            Ok(inner.combine(IntermediateExpr::new_non_agg(Expr::Unary {
+                op: UnOp::IsFalse,
+                operand: Box::new(inner.last_expr().clone()),
+            })))
+        }
+        ast::Expr::IsTrue(e) => {
+            let inner = codegen_expr(*e, ctx)?;
+            Ok(inner.combine(IntermediateExpr::new_non_agg(Expr::Unary {
+                op: UnOp::IsTrue,
+                operand: Box::new(inner.last_expr().clone()),
+            })))
+        }
+        ast::Expr::IsNull(e) => {
+            let inner = codegen_expr(*e, ctx)?;
+            Ok(inner.combine(IntermediateExpr::new_non_agg(Expr::Unary {
+                op: UnOp::IsNull,
+                operand: Box::new(inner.last_expr().clone()),
+            })))
+        }
+        ast::Expr::IsNotNull(e) => {
+            let inner = codegen_expr(*e, ctx)?;
+            Ok(inner.combine(IntermediateExpr::new_non_agg(Expr::Unary {
+                op: UnOp::IsNotNull,
+                operand: Box::new(inner.last_expr().clone()),
+            })))
+        }
         ast::Expr::Between {
             expr,
             negated,
             low,
             high,
         } => {
-            let expr: Box<Expr> = Box::new(codegen_expr(*expr, ctx)?);
-            let left = Box::new(codegen_expr(*low, ctx)?);
-            let right = Box::new(codegen_expr(*high, ctx)?);
-            let between = Expr::Binary {
+            let expr_gen = codegen_expr(*expr, ctx)?;
+            let expr: Box<Expr> = Box::new(expr_gen.last_expr().clone());
+
+            let left_gen = codegen_expr(*low, ctx)?;
+            let left = Box::new(left_gen.last_expr().clone());
+
+            let right_gen = codegen_expr(*high, ctx)?;
+            let right = Box::new(right_gen.last_expr().clone());
+
+            let between_gen = IntermediateExpr::new_non_agg(Expr::Binary {
                 left: Box::new(Expr::Binary {
                     left,
                     op: BinOp::LessThanOrEqual,
@@ -625,26 +703,46 @@ fn codegen_expr(expr_ast: ast::Expr, ctx: &mut CodegenContext) -> Result<Expr, E
                     op: BinOp::LessThanOrEqual,
                     right,
                 }),
-            };
+            });
+
+            let between = expr_gen
+                .combine(left_gen)
+                .combine(right_gen)
+                .combine(between_gen);
+
             if negated {
-                Ok(Expr::Unary {
+                Ok(between.combine(IntermediateExpr::new_non_agg(Expr::Unary {
                     op: UnOp::Not,
-                    operand: Box::new(between),
-                })
+                    operand: Box::new(between_gen.last_expr().clone()),
+                })))
             } else {
                 Ok(between)
             }
         }
-        ast::Expr::BinaryOp { left, op, right } => Ok(Expr::Binary {
-            left: Box::new(codegen_expr(*left, ctx)?),
-            op: op.try_into()?,
-            right: Box::new(codegen_expr(*right, ctx)?),
-        }),
-        ast::Expr::UnaryOp { op, expr } => Ok(Expr::Unary {
-            op: op.try_into()?,
-            operand: Box::new(codegen_expr(*expr, ctx)?),
-        }),
-        ast::Expr::Value(v) => Ok(Expr::Value(v.try_into()?)),
+        ast::Expr::BinaryOp { left, op, right } => {
+            let left = codegen_expr(*left, ctx)?;
+            let left_operand = Box::new(left.last_expr().clone());
+            let right = codegen_expr(*right, ctx)?;
+            let right_operand = Box::new(right.last_expr().clone());
+
+            let binary_expr = Expr::Binary {
+                left: left_operand,
+                op: op.try_into()?,
+                right: right_operand,
+            };
+
+            Ok(left
+                .combine(right)
+                .combine(IntermediateExpr::new_non_agg(binary_expr)))
+        }
+        ast::Expr::UnaryOp { op, expr } => {
+            let inner = codegen_expr(*expr, ctx)?;
+            Ok(inner.combine(IntermediateExpr::new_non_agg(Expr::Unary {
+                op: op.try_into()?,
+                operand: Box::new(inner.last_expr().clone()),
+            })))
+        }
+        ast::Expr::Value(v) => Ok(IntermediateExpr::new_non_agg(Expr::Value(v.try_into()?))),
         ast::Expr::Function(ref f) => {
             let fn_name = f.name.to_string();
             Ok(Expr::Function {
@@ -662,6 +760,85 @@ fn codegen_expr(expr_ast: ast::Expr, ctx: &mut CodegenContext) -> Result<Expr, E
         }),
     }
 }
+
+// fn codegen_expr(expr_ast: ast::Expr, ctx: &mut CodegenContext) -> Result<Expr, ExprError> {
+//     match expr_ast {
+//         ast::Expr::Identifier(i) => Ok(Expr::ColumnRef(vec![i].try_into()?)),
+//         ast::Expr::CompoundIdentifier(i) => Ok(Expr::ColumnRef(i.try_into()?)),
+//         ast::Expr::IsFalse(e) => Ok(Expr::Unary {
+//             op: UnOp::IsFalse,
+//             operand: Box::new(codegen_expr(*e, ctx)?),
+//         }),
+//         ast::Expr::IsTrue(e) => Ok(Expr::Unary {
+//             op: UnOp::IsTrue,
+//             operand: Box::new(codegen_expr(*e, ctx)?),
+//         }),
+//         ast::Expr::IsNull(e) => Ok(Expr::Unary {
+//             op: UnOp::IsNull,
+//             operand: Box::new(codegen_expr(*e, ctx)?),
+//         }),
+//         ast::Expr::IsNotNull(e) => Ok(Expr::Unary {
+//             op: UnOp::IsNotNull,
+//             operand: Box::new(codegen_expr(*e, ctx)?),
+//         }),
+//         ast::Expr::Between {
+//             expr,
+//             negated,
+//             low,
+//             high,
+//         } => {
+//             let expr: Box<Expr> = Box::new(codegen_expr(*expr, ctx)?);
+//             let left = Box::new(codegen_expr(*low, ctx)?);
+//             let right = Box::new(codegen_expr(*high, ctx)?);
+//             let between = Expr::Binary {
+//                 left: Box::new(Expr::Binary {
+//                     left,
+//                     op: BinOp::LessThanOrEqual,
+//                     right: expr.clone(),
+//                 }),
+//                 op: BinOp::And,
+//                 right: Box::new(Expr::Binary {
+//                     left: expr,
+//                     op: BinOp::LessThanOrEqual,
+//                     right,
+//                 }),
+//             };
+//             if negated {
+//                 Ok(Expr::Unary {
+//                     op: UnOp::Not,
+//                     operand: Box::new(between),
+//                 })
+//             } else {
+//                 Ok(between)
+//             }
+//         }
+//         ast::Expr::BinaryOp { left, op, right } => Ok(Expr::Binary {
+//             left: Box::new(codegen_expr(*left, ctx)?),
+//             op: op.try_into()?,
+//             right: Box::new(codegen_expr(*right, ctx)?),
+//         }),
+//         ast::Expr::UnaryOp { op, expr } => Ok(Expr::Unary {
+//             op: op.try_into()?,
+//             operand: Box::new(codegen_expr(*expr, ctx)?),
+//         }),
+//         ast::Expr::Value(v) => Ok(Expr::Value(v.try_into()?)),
+//         ast::Expr::Function(ref f) => {
+//             let fn_name = f.name.to_string();
+//             Ok(Expr::Function {
+//                 name: fn_name.as_str().into(),
+//                 args: f
+//                     .args
+//                     .iter()
+//                     .map(|arg| codegen_fn_arg(&expr_ast, arg, ctx))
+//                     .collect::<Result<Vec<_>, _>>()?,
+//             })
+//         }
+//         _ => Err(ExprError::Expr {
+//             reason: "Unsupported expression",
+//             expr: expr_ast,
+//         }),
+//     }
+// }
 
 fn is_fn_name_aggregate(fn_name: &str) -> bool {
     AGGREGATE_FUNCTIONS.contains(fn_name)
@@ -1486,6 +1663,84 @@ mod codegen_tests {
                                 .next_index(),
                         }
                     ]
+                )
+            },
+        );
+
+        check_single_statement(
+            "SELECT col2, MAX(col3) + 1 AS max_col3
+            FROM table1
+            GROUP BY col2
+            ",
+            |instrs| {
+                assert_eq!(
+                    &[
+                        Instruction::Source {
+                            index: RegisterIndex::default(),
+                            name: TableRef {
+                                schema_name: None,
+                                table_name: "table1".into()
+                            }
+                        },
+                        Instruction::Empty {
+                            index: RegisterIndex::default().next_index()
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default().next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col2".into(),
+                            }),
+                            alias: None
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default().next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col3".into(),
+                            }),
+                            alias: Some("__otter_temp_col_1".into())
+                        },
+                        Instruction::Empty {
+                            index: RegisterIndex::default().next_index().next_index()
+                        },
+                        Instruction::GroupBy {
+                            input: RegisterIndex::default().next_index(),
+                            output: RegisterIndex::default().next_index().next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col2".into(),
+                            })
+                        },
+                        Instruction::Empty {
+                            index: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                        },
+                        Instruction::Aggregate {
+                            input: RegisterIndex::default().next_index().next_index(),
+                            output: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            func: AggregateFunction::Max,
+                            col_name: "__otter_temp_col_1".into(),
+                            alias: Some("max_col3".into()),
+                        },
+                        Instruction::Return {
+                            index: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                        }
+                    ],
+                    instrs,
                 )
             },
         );
