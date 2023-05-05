@@ -237,12 +237,15 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                             row_index: row_reg,
                         });
 
-                        for value in row {
-                            let value = codegen_expr(value, &mut ctx)?;
+                        for value_ast in row {
+                            let value = codegen_expr(value_ast, &mut ctx)?.get_non_agg(
+                                "Aggregate expressions are not supported in values",
+                                value_ast,
+                            )?;
                             ctx.instrs.push(Instruction::AddValue {
                                 row_index: row_reg,
                                 expr: value,
-                            });
+                            })
                         }
                     }
                     Ok(())
@@ -328,8 +331,11 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                         }
                     }
 
-                    if let Some(expr) = select.selection.clone() {
-                        let expr = codegen_expr(expr, &mut ctx)?;
+                    if let Some(expr_ast) = select.selection.clone() {
+                        let expr = codegen_expr(expr_ast, &mut ctx)?.get_non_agg(
+                            "Aggregate expressions are not supported in WHERE clause. Use HAVING clause instead",
+                            expr_ast,
+                        )?;
                         ctx.instrs.push(Instruction::Filter {
                             index: table_reg_index,
                             expr,
@@ -463,18 +469,15 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                         }
                     }
 
-                    if let Some(expr) = select.having.clone() {
-                        if is_expr_agg(&expr) {
-                            return Err(CodegenError::UnsupportedStatementForm(
-                                concat!(
-                                    "HAVING clause does not support inline aggregations.",
-                                    " Select the expression `AS some_col_name` ",
-                                    "and then use `HAVING` on `some_col_name`."
-                                ),
-                                select.to_string(),
-                            ));
-                        }
-                        let expr = codegen_expr(expr, &mut ctx)?;
+                    if let Some(expr_ast) = select.having.clone() {
+                        let expr = codegen_expr(expr_ast, &mut ctx)?.get_non_agg(
+                            concat!(
+                                "HAVING clause does not support inline aggregations.",
+                                " Select the expression `AS some_col_name` ",
+                                "and then use `HAVING` on `some_col_name`."
+                            ),
+                            expr_ast,
+                        )?;
                         ctx.instrs.push(Instruction::Filter {
                             index: table_reg_index,
                             expr,
@@ -483,7 +486,11 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                 }
                 SetExpr::Values(exprs) => {
                     if exprs.0.len() == 1 && exprs.0[0].len() == 1 {
-                        let expr: Expr = codegen_expr(exprs.0[0][0].clone(), &mut ctx)?;
+                        let expr_ast = exprs.0[0][0].clone();
+                        let expr = codegen_expr(expr_ast, &mut ctx)?.get_non_agg(
+                            "Aggregate expressions are not supported in values",
+                            expr_ast,
+                        )?;
                         ctx.instrs.push(Instruction::Expr {
                             index: table_reg_index,
                             expr,
@@ -530,7 +537,10 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
             };
 
             for order_by in query.order_by.clone() {
-                let order_by_expr = codegen_expr(order_by.expr, &mut ctx)?;
+                let order_by_expr = codegen_expr(order_by.expr, &mut ctx)?.get_non_agg(
+                    "Aggregate expressions are not supported in ORDER BY",
+                    order_by.expr,
+                )?;
                 ctx.instrs.push(Instruction::Order {
                     index: table_reg_index,
                     expr: order_by_expr,
@@ -633,6 +643,20 @@ impl IntermediateExpr {
                     Self::Agg(sel)
                 }
             },
+        }
+    }
+
+    pub fn get_non_agg(
+        self,
+        err_reason: &'static str,
+        expr_ast: ast::Expr,
+    ) -> Result<Expr, ExprError> {
+        match self {
+            IntermediateExpr::Agg(_) => Err(ExprError::Expr {
+                reason: err_reason,
+                expr: expr_ast,
+            }),
+            IntermediateExpr::NonAgg(e) => Ok(e),
         }
     }
 }
