@@ -10,7 +10,7 @@ use std::{error::Error, fmt::Display};
 
 use crate::{
     expr::{agg::AggregateFunction, BinOp, Expr, ExprError, UnOp},
-    identifier::IdentifierError,
+    identifier::{ColumnRef, IdentifierError},
     ir::{Instruction, IntermediateCode},
     parser::parse,
     value::{Value, ValueError},
@@ -745,14 +745,68 @@ fn codegen_expr(
         ast::Expr::Value(v) => Ok(IntermediateExpr::new_non_agg(Expr::Value(v.try_into()?))),
         ast::Expr::Function(ref f) => {
             let fn_name = f.name.to_string();
-            Ok(Expr::Function {
-                name: fn_name.as_str().into(),
-                args: f
-                    .args
-                    .iter()
-                    .map(|arg| codegen_fn_arg(&expr_ast, arg, ctx))
-                    .collect::<Result<Vec<_>, _>>()?,
-            })
+            let args = f
+                .args
+                .iter()
+                .map(|arg| {
+                    let ie = codegen_fn_arg(&expr_ast, arg, ctx)?;
+                    Ok::<(IntermediateExpr, Expr), ExprError>((ie, ie.last_expr().clone()))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            if is_fn_name_aggregate(&fn_name.to_lowercase()) {
+                if args.len() > 1 {
+                    Err(ExprError::Expr {
+                        reason: "Aggregates with more than one arguments are not supported yet.",
+                        expr: expr_ast,
+                    })
+                } else {
+                    let args = args
+                        .into_iter()
+                        .map(|a| match a {
+                            (IntermediateExpr::Agg(_), _) => Err(ExprError::Expr {
+                                reason: "Aggregates within aggregates are not supported yet",
+                                expr: expr_ast,
+                            }),
+                            (IntermediateExpr::NonAgg(e), last_expr) => {
+                                Ok((e, ctx.get_new_temp_col()))
+                            }
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                    let agg_result_col = ctx.get_new_temp_col();
+                    let agg_col_res = Expr::ColumnRef(ColumnRef {
+                        schema_name: None,
+                        table_name: None,
+                        col_name: agg_result_col,
+                    });
+                    Ok(IntermediateExpr::Agg(IntermediateExprAgg {
+                        pre_agg: args,
+                        agg: vec![(
+                            AggregateFunction::from_name(&fn_name.to_lowercase())?,
+                            args[0].1,
+                            agg_result_col,
+                        )],
+                        post_agg: vec![agg_col_res],
+                        last_alias: Some(agg_result_col),
+                        last_expr: (agg_col_res, agg_result_col),
+                    }))
+                }
+            } else {
+                if args.is_empty() {
+                    Ok(IntermediateExpr::new_non_agg(Expr::Function {
+                        name: fn_name.as_str().into(),
+                        args: args.iter().map(|ie| ie.1).collect(),
+                    }))
+                } else {
+                    let start = args[0].0;
+                    let combined = args.iter().skip(1).fold(start, |acc, ie| acc.combine(ie.0));
+                    Ok(
+                        combined.combine(IntermediateExpr::new_non_agg(Expr::Function {
+                            name: fn_name.as_str().into(),
+                            args: args.iter().map(|ie| ie.1).collect(),
+                        })),
+                    )
+                }
+            }
         }
         _ => Err(ExprError::Expr {
             reason: "Unsupported expression",
@@ -864,11 +918,11 @@ fn codegen_fn_arg(
     expr_ast: &ast::Expr,
     arg: &FunctionArg,
     ctx: &mut CodegenContext,
-) -> Result<Expr, ExprError> {
+) -> Result<IntermediateExpr, ExprError> {
     match arg {
         ast::FunctionArg::Unnamed(arg_expr) => match arg_expr {
             ast::FunctionArgExpr::Expr(e) => Ok(codegen_expr(e.clone(), ctx)?),
-            ast::FunctionArgExpr::Wildcard => Ok(Expr::Wildcard),
+            ast::FunctionArgExpr::Wildcard => Ok(IntermediateExpr::new_non_agg(Expr::Wildcard)),
             ast::FunctionArgExpr::QualifiedWildcard(_) => Err(ExprError::Expr {
                 reason: "Qualified wildcards are not supported yet",
                 expr: expr_ast.clone(),
