@@ -238,7 +238,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                         });
 
                         for value_ast in row {
-                            let value = codegen_expr(value_ast, &mut ctx)?.get_non_agg(
+                            let value = codegen_expr(value_ast.clone(), &mut ctx)?.get_non_agg(
                                 "Aggregate expressions are not supported in values",
                                 value_ast,
                             )?;
@@ -332,7 +332,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                     }
 
                     if let Some(expr_ast) = select.selection.clone() {
-                        let expr = codegen_expr(expr_ast, &mut ctx)?.get_non_agg(
+                        let expr = codegen_expr(expr_ast.clone(), &mut ctx)?.get_non_agg(
                             "Aggregate expressions are not supported in WHERE clause. Use HAVING clause instead",
                             expr_ast,
                         )?;
@@ -470,7 +470,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                     }
 
                     if let Some(expr_ast) = select.having.clone() {
-                        let expr = codegen_expr(expr_ast, &mut ctx)?.get_non_agg(
+                        let expr = codegen_expr(expr_ast.clone(), &mut ctx)?.get_non_agg(
                             concat!(
                                 "HAVING clause does not support inline aggregations.",
                                 " Select the expression `AS some_col_name` ",
@@ -487,7 +487,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                 SetExpr::Values(exprs) => {
                     if exprs.0.len() == 1 && exprs.0[0].len() == 1 {
                         let expr_ast = exprs.0[0][0].clone();
-                        let expr = codegen_expr(expr_ast, &mut ctx)?.get_non_agg(
+                        let expr = codegen_expr(expr_ast.clone(), &mut ctx)?.get_non_agg(
                             "Aggregate expressions are not supported in values",
                             expr_ast,
                         )?;
@@ -537,7 +537,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
             };
 
             for order_by in query.order_by.clone() {
-                let order_by_expr = codegen_expr(order_by.expr, &mut ctx)?.get_non_agg(
+                let order_by_expr = codegen_expr(order_by.expr.clone(), &mut ctx)?.get_non_agg(
                     "Aggregate expressions are not supported in ORDER BY",
                     order_by.expr,
                 )?;
@@ -594,7 +594,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
     Ok(IntermediateCode { instrs: ctx.instrs })
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct IntermediateExprAgg {
     pub pre_agg: Vec<(Expr, BoundedString)>,
     pub agg: Vec<(AggregateFunction, BoundedString, BoundedString)>,
@@ -603,7 +603,7 @@ struct IntermediateExprAgg {
     last_expr: (Expr, BoundedString),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum IntermediateExpr {
     NonAgg(Expr),
     Agg(IntermediateExprAgg),
@@ -624,8 +624,8 @@ impl IntermediateExpr {
 
     pub fn combine(self, new: IntermediateExpr) -> Self {
         match self {
-            Self::NonAgg(sel) => new,
-            Self::Agg(sel) => match new {
+            Self::NonAgg(_) => new,
+            Self::Agg(mut sel) => match new {
                 Self::NonAgg(new) => {
                     // TODO: last_expr may need updating here?
                     if sel.post_agg.len() <= 1 {
@@ -674,31 +674,35 @@ fn codegen_expr(
         ))),
         ast::Expr::IsFalse(e) => {
             let inner = codegen_expr(*e, ctx)?;
-            Ok(inner.combine(IntermediateExpr::new_non_agg(Expr::Unary {
+            let new_expr = Expr::Unary {
                 op: UnOp::IsFalse,
                 operand: Box::new(inner.last_expr().clone()),
-            })))
+            };
+            Ok(inner.combine(IntermediateExpr::new_non_agg(new_expr)))
         }
         ast::Expr::IsTrue(e) => {
             let inner = codegen_expr(*e, ctx)?;
-            Ok(inner.combine(IntermediateExpr::new_non_agg(Expr::Unary {
+            let new_expr = Expr::Unary {
                 op: UnOp::IsTrue,
                 operand: Box::new(inner.last_expr().clone()),
-            })))
+            };
+            Ok(inner.combine(IntermediateExpr::new_non_agg(new_expr)))
         }
         ast::Expr::IsNull(e) => {
             let inner = codegen_expr(*e, ctx)?;
-            Ok(inner.combine(IntermediateExpr::new_non_agg(Expr::Unary {
+            let new_expr = Expr::Unary {
                 op: UnOp::IsNull,
                 operand: Box::new(inner.last_expr().clone()),
-            })))
+            };
+            Ok(inner.combine(IntermediateExpr::new_non_agg(new_expr)))
         }
         ast::Expr::IsNotNull(e) => {
             let inner = codegen_expr(*e, ctx)?;
-            Ok(inner.combine(IntermediateExpr::new_non_agg(Expr::Unary {
+            let new_expr = Expr::Unary {
                 op: UnOp::IsNotNull,
                 operand: Box::new(inner.last_expr().clone()),
-            })))
+            };
+            Ok(inner.combine(IntermediateExpr::new_non_agg(new_expr)))
         }
         ast::Expr::Between {
             expr,
@@ -728,6 +732,7 @@ fn codegen_expr(
                     right,
                 }),
             });
+            let between_last_expr = between_gen.last_expr().clone();
 
             let between = expr_gen
                 .combine(left_gen)
@@ -737,7 +742,7 @@ fn codegen_expr(
             if negated {
                 Ok(between.combine(IntermediateExpr::new_non_agg(Expr::Unary {
                     op: UnOp::Not,
-                    operand: Box::new(between_gen.last_expr().clone()),
+                    operand: Box::new(between_last_expr),
                 })))
             } else {
                 Ok(between)
@@ -761,10 +766,11 @@ fn codegen_expr(
         }
         ast::Expr::UnaryOp { op, expr } => {
             let inner = codegen_expr(*expr, ctx)?;
-            Ok(inner.combine(IntermediateExpr::new_non_agg(Expr::Unary {
+            let new_expr = Expr::Unary {
                 op: op.try_into()?,
                 operand: Box::new(inner.last_expr().clone()),
-            })))
+            };
+            Ok(inner.combine(IntermediateExpr::new_non_agg(new_expr)))
         }
         ast::Expr::Value(v) => Ok(IntermediateExpr::new_non_agg(Expr::Value(v.try_into()?))),
         ast::Expr::Function(ref f) => {
@@ -774,7 +780,8 @@ fn codegen_expr(
                 .iter()
                 .map(|arg| {
                     let ie = codegen_fn_arg(&expr_ast, arg, ctx)?;
-                    Ok::<(IntermediateExpr, Expr), ExprError>((ie, ie.last_expr().clone()))
+                    let last_expr = ie.last_expr().clone();
+                    Ok::<(IntermediateExpr, Expr), ExprError>((ie, last_expr))
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             if is_fn_name_aggregate(&fn_name.to_lowercase()) {
@@ -789,11 +796,9 @@ fn codegen_expr(
                         .map(|a| match a {
                             (IntermediateExpr::Agg(_), _) => Err(ExprError::Expr {
                                 reason: "Aggregates within aggregates are not supported yet",
-                                expr: expr_ast,
+                                expr: expr_ast.clone(),
                             }),
-                            (IntermediateExpr::NonAgg(e), last_expr) => {
-                                Ok((e, ctx.get_new_temp_col()))
-                            }
+                            (IntermediateExpr::NonAgg(e), _) => Ok((e, ctx.get_new_temp_col())),
                         })
                         .collect::<Result<Vec<_>, _>>()?;
                     let agg_result_col = ctx.get_new_temp_col();
@@ -802,14 +807,15 @@ fn codegen_expr(
                         table_name: None,
                         col_name: agg_result_col,
                     });
+                    let agg = vec![(
+                        AggregateFunction::from_name(&fn_name.to_lowercase())?,
+                        args[0].1,
+                        agg_result_col,
+                    )];
                     Ok(IntermediateExpr::Agg(IntermediateExprAgg {
                         pre_agg: args,
-                        agg: vec![(
-                            AggregateFunction::from_name(&fn_name.to_lowercase())?,
-                            args[0].1,
-                            agg_result_col,
-                        )],
-                        post_agg: vec![agg_col_res],
+                        agg,
+                        post_agg: vec![agg_col_res.clone()],
                         last_alias: Some(agg_result_col),
                         last_expr: (agg_col_res, agg_result_col),
                     }))
@@ -818,15 +824,18 @@ fn codegen_expr(
                 if args.is_empty() {
                     Ok(IntermediateExpr::new_non_agg(Expr::Function {
                         name: fn_name.as_str().into(),
-                        args: args.iter().map(|ie| ie.1).collect(),
+                        args: args.iter().map(|ie| ie.1.clone()).collect(),
                     }))
                 } else {
-                    let start = args[0].0;
-                    let combined = args.iter().skip(1).fold(start, |acc, ie| acc.combine(ie.0));
+                    let start = args[0].0.clone();
+                    let combined = args
+                        .iter()
+                        .skip(1)
+                        .fold(start, |acc, ie| acc.combine(ie.0.clone()));
                     Ok(
                         combined.combine(IntermediateExpr::new_non_agg(Expr::Function {
                             name: fn_name.as_str().into(),
-                            args: args.iter().map(|ie| ie.1).collect(),
+                            args: args.iter().map(|ie| ie.1.clone()).collect(),
                         })),
                     )
                 }
