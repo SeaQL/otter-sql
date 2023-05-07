@@ -1618,16 +1618,6 @@ mod codegen_tests {
                             expr: Expr::ColumnRef(ColumnRef {
                                 schema_name: None,
                                 table_name: None,
-                                col_name: "col2".into(),
-                            }),
-                            alias: None
-                        },
-                        Instruction::Project {
-                            input: RegisterIndex::default(),
-                            output: RegisterIndex::default().next_index(),
-                            expr: Expr::ColumnRef(ColumnRef {
-                                schema_name: None,
-                                table_name: None,
                                 col_name: "col3".into(),
                             }),
                             alias: Some("__otter_temp_col_1".into())
@@ -1666,6 +1656,20 @@ mod codegen_tests {
                                 .next_index()
                                 .next_index()
                                 .next_index()
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col2".into(),
+                            }),
+                            alias: None
                         },
                         Instruction::Project {
                             input: RegisterIndex::default()
@@ -1737,16 +1741,6 @@ mod codegen_tests {
                             expr: Expr::ColumnRef(ColumnRef {
                                 schema_name: None,
                                 table_name: None,
-                                col_name: "col2".into(),
-                            }),
-                            alias: None
-                        },
-                        Instruction::Project {
-                            input: RegisterIndex::default(),
-                            output: RegisterIndex::default().next_index(),
-                            expr: Expr::ColumnRef(ColumnRef {
-                                schema_name: None,
-                                table_name: None,
                                 col_name: "col3".into(),
                             }),
                             alias: Some("__otter_temp_col_1".into())
@@ -1785,6 +1779,20 @@ mod codegen_tests {
                                 .next_index()
                                 .next_index()
                                 .next_index()
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col2".into(),
+                            }),
+                            alias: None
                         },
                         Instruction::Project {
                             input: RegisterIndex::default()
@@ -1850,26 +1858,6 @@ mod codegen_tests {
                         },
                         Instruction::Empty {
                             index: RegisterIndex::default().next_index()
-                        },
-                        Instruction::Project {
-                            input: RegisterIndex::default(),
-                            output: RegisterIndex::default().next_index(),
-                            expr: Expr::ColumnRef(ColumnRef {
-                                schema_name: None,
-                                table_name: None,
-                                col_name: "col2".into(),
-                            }),
-                            alias: None
-                        },
-                        Instruction::Project {
-                            input: RegisterIndex::default(),
-                            output: RegisterIndex::default().next_index(),
-                            expr: Expr::ColumnRef(ColumnRef {
-                                schema_name: None,
-                                table_name: None,
-                                col_name: "col3".into(),
-                            }),
-                            alias: None
                         },
                         Instruction::Project {
                             input: RegisterIndex::default(),
@@ -1947,6 +1935,36 @@ mod codegen_tests {
                                 .next_index()
                                 .next_index()
                                 .next_index()
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col2".into(),
+                            }),
+                            alias: None
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default(),
+                            output: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "col3".into(),
+                            }),
+                            alias: None
                         },
                         Instruction::Project {
                             input: RegisterIndex::default()
