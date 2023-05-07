@@ -342,11 +342,10 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                     // evaluated as `Project (col * col)` into `%2` and then apply the group by on
                     // `%2`.
                     let pre_grouped_reg_index = table_reg_index;
-                    let mut pre_grouped_inter_reg_index = pre_grouped_reg_index;
                     // let mut agg_intermediate_cols = Vec::new();
                     // if !select.projection.is_empty() {
                     if !inter_exprs.is_empty() {
-                        pre_grouped_inter_reg_index = ctx.get_and_increment_reg();
+                        let pre_grouped_inter_reg_index = ctx.get_and_increment_reg();
                         ctx.instrs.push(Instruction::Empty {
                             index: pre_grouped_inter_reg_index,
                         });
@@ -447,7 +446,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                                     IntermediateExpr::NonAgg(expr) => {
                                         let alias = extract_alias_from_project(&projection)?;
                                         let projection = Instruction::Project {
-                                            input: pre_grouped_inter_reg_index,
+                                            input: pre_grouped_reg_index,
                                             output: table_reg_index,
                                             expr: expr.clone(),
                                             alias,
@@ -464,7 +463,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                                     IntermediateExpr::NonAgg(expr) => {
                                         let alias = extract_alias_from_project(&projection)?;
                                         let projection = Instruction::Project {
-                                            input: pre_grouped_inter_reg_index,
+                                            input: pre_grouped_reg_index,
                                             output: table_reg_index,
                                             expr: expr.clone(),
                                             alias,
