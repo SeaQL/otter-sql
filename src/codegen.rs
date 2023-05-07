@@ -724,7 +724,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
     Ok(IntermediateCode { instrs: ctx.instrs })
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct IntermediateExprAgg {
     pub pre_agg: Vec<(Expr, BoundedString)>,
     pub agg: Vec<(AggregateFunction, BoundedString, BoundedString)>,
@@ -1798,7 +1798,6 @@ mod codegen_tests {
             ",
             |instrs| {
                 assert_eq!(
-                    instrs,
                     &[
                         Instruction::Source {
                             index: RegisterIndex::default(),
@@ -1868,10 +1867,35 @@ mod codegen_tests {
                                 .next_index(),
                             func: AggregateFunction::Max,
                             col_name: "__otter_temp_col_1".into(),
-                            alias: Some("max_col3".into()),
+                            alias: Some("__otter_temp_col_2".into()),
+                        },
+                        Instruction::Empty {
+                            index: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            output: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "__otter_temp_col_2".into(),
+                            }),
+                            alias: Some("max_col3".into())
                         },
                         Instruction::Filter {
                             index: RegisterIndex::default()
+                                .next_index()
                                 .next_index()
                                 .next_index()
                                 .next_index(),
@@ -1889,9 +1913,11 @@ mod codegen_tests {
                             index: RegisterIndex::default()
                                 .next_index()
                                 .next_index()
+                                .next_index()
                                 .next_index(),
                         }
-                    ]
+                    ],
+                    instrs,
                 )
             },
         );
@@ -1960,10 +1986,39 @@ mod codegen_tests {
                                 .next_index(),
                             func: AggregateFunction::Max,
                             col_name: "__otter_temp_col_1".into(),
+                            alias: Some("__otter_temp_col_2".into()),
+                        },
+                        Instruction::Empty {
+                            index: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            output: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            expr: Expr::Binary {
+                                left: Box::new(Expr::ColumnRef(ColumnRef {
+                                    schema_name: None,
+                                    table_name: None,
+                                    col_name: "__otter_temp_col_2".into(),
+                                })),
+                                op: BinOp::Plus,
+                                right: Box::new(Expr::Value(Value::Int64(1))),
+                            },
                             alias: Some("max_col3".into()),
                         },
                         Instruction::Return {
                             index: RegisterIndex::default()
+                                .next_index()
                                 .next_index()
                                 .next_index()
                                 .next_index(),
@@ -2092,10 +2147,38 @@ mod codegen_tests {
                                 .next_index(),
                             func: AggregateFunction::Sum,
                             col_name: "__otter_temp_col_1".into(),
-                            alias: Some("sos".into()),
+                            alias: Some("__otter_temp_col_2".into()),
+                        },
+                        Instruction::Empty {
+                            index: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                        },
+                        Instruction::Project {
+                            input: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            output: RegisterIndex::default()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index()
+                                .next_index(),
+                            expr: Expr::ColumnRef(ColumnRef {
+                                schema_name: None,
+                                table_name: None,
+                                col_name: "__otter_temp_col_2".into(),
+                            }),
+                            alias: Some("sos".into())
                         },
                         Instruction::Return {
                             index: RegisterIndex::default()
+                                .next_index()
                                 .next_index()
                                 .next_index()
                                 .next_index()
@@ -2113,9 +2196,11 @@ mod codegen_tests {
 mod expr_codegen_tests {
     use sqlparser::{ast, dialect::GenericDialect, parser::Parser, tokenizer::Tokenizer};
 
+    use pretty_assertions::{assert_eq, assert_ne};
+
     use crate::{
-        codegen::{codegen_expr, CodegenContext},
-        expr::{BinOp, Expr, ExprError, UnOp},
+        codegen::{codegen_expr, CodegenContext, IntermediateExpr, IntermediateExprAgg},
+        expr::{agg::AggregateFunction, BinOp, Expr, ExprError, UnOp},
         identifier::ColumnRef,
         value::Value,
     };
@@ -2130,13 +2215,24 @@ mod expr_codegen_tests {
             parser.parse_expr().unwrap()
         }
 
-        fn codegen_expr_wrapper(expr_ast: ast::Expr) -> Result<Expr, ExprError> {
+        fn codegen_expr_wrapper_no_agg(expr_ast: ast::Expr) -> Result<Expr, ExprError> {
             let mut ctx = CodegenContext::new();
-            codegen_expr(expr_ast, &mut ctx)
+            match codegen_expr(expr_ast, &mut ctx)? {
+                IntermediateExpr::Agg(_) => panic!("Expected unaggregated expression"),
+                IntermediateExpr::NonAgg(expr) => Ok(expr),
+            }
+        }
+
+        fn codegen_expr_wrapper_agg(expr_ast: ast::Expr) -> Result<IntermediateExprAgg, ExprError> {
+            let mut ctx = CodegenContext::new();
+            match codegen_expr(expr_ast, &mut ctx)? {
+                IntermediateExpr::Agg(agg) => Ok(agg),
+                IntermediateExpr::NonAgg(expr) => panic!("Expected aggregated expression"),
+            }
         }
 
         assert_eq!(
-            codegen_expr_wrapper(parse_expr("abc")),
+            codegen_expr_wrapper_no_agg(parse_expr("abc")),
             Ok(Expr::ColumnRef(ColumnRef {
                 schema_name: None,
                 table_name: None,
@@ -2145,7 +2241,7 @@ mod expr_codegen_tests {
         );
 
         assert_ne!(
-            codegen_expr_wrapper(parse_expr("abc")),
+            codegen_expr_wrapper_no_agg(parse_expr("abc")),
             Ok(Expr::ColumnRef(ColumnRef {
                 schema_name: None,
                 table_name: None,
@@ -2154,7 +2250,7 @@ mod expr_codegen_tests {
         );
 
         assert_eq!(
-            codegen_expr_wrapper(parse_expr("table1.col1")),
+            codegen_expr_wrapper_no_agg(parse_expr("table1.col1")),
             Ok(Expr::ColumnRef(ColumnRef {
                 schema_name: None,
                 table_name: Some("table1".into()),
@@ -2163,7 +2259,7 @@ mod expr_codegen_tests {
         );
 
         assert_eq!(
-            codegen_expr_wrapper(parse_expr("schema1.table1.col1")),
+            codegen_expr_wrapper_no_agg(parse_expr("schema1.table1.col1")),
             Ok(Expr::ColumnRef(ColumnRef {
                 schema_name: Some("schema1".into()),
                 table_name: Some("table1".into()),
@@ -2172,7 +2268,7 @@ mod expr_codegen_tests {
         );
 
         assert_eq!(
-            codegen_expr_wrapper(parse_expr("5 IS NULL")),
+            codegen_expr_wrapper_no_agg(parse_expr("5 IS NULL")),
             Ok(Expr::Unary {
                 op: UnOp::IsNull,
                 operand: Box::new(Expr::Value(Value::Int64(5)))
@@ -2180,7 +2276,7 @@ mod expr_codegen_tests {
         );
 
         assert_eq!(
-            codegen_expr_wrapper(parse_expr("1 IS TRUE")),
+            codegen_expr_wrapper_no_agg(parse_expr("1 IS TRUE")),
             Ok(Expr::Unary {
                 op: UnOp::IsTrue,
                 operand: Box::new(Expr::Value(Value::Int64(1)))
@@ -2188,7 +2284,7 @@ mod expr_codegen_tests {
         );
 
         assert_eq!(
-            codegen_expr_wrapper(parse_expr("4 BETWEEN 3 AND 5")),
+            codegen_expr_wrapper_no_agg(parse_expr("4 BETWEEN 3 AND 5")),
             Ok(Expr::Binary {
                 left: Box::new(Expr::Binary {
                     left: Box::new(Expr::Value(Value::Int64(3))),
@@ -2205,7 +2301,7 @@ mod expr_codegen_tests {
         );
 
         assert_eq!(
-            codegen_expr_wrapper(parse_expr("4 NOT BETWEEN 3 AND 5")),
+            codegen_expr_wrapper_no_agg(parse_expr("4 NOT BETWEEN 3 AND 5")),
             Ok(Expr::Unary {
                 op: UnOp::Not,
                 operand: Box::new(Expr::Binary {
@@ -2225,19 +2321,40 @@ mod expr_codegen_tests {
         );
 
         assert_eq!(
-            codegen_expr_wrapper(parse_expr("MAX(col1)")),
-            Ok(Expr::Function {
-                name: "MAX".into(),
-                args: vec![Expr::ColumnRef(ColumnRef {
+            codegen_expr_wrapper_agg(parse_expr("MAX(col1)")),
+            Ok(IntermediateExprAgg {
+                pre_agg: vec![(
+                    Expr::ColumnRef(ColumnRef {
+                        schema_name: None,
+                        table_name: None,
+                        col_name: "col1".into()
+                    }),
+                    "__otter_temp_col_1".into()
+                )],
+                agg: vec![(
+                    AggregateFunction::Max,
+                    "__otter_temp_col_1".into(),
+                    "__otter_temp_col_2".into()
+                )],
+                post_agg: vec![Expr::ColumnRef(ColumnRef {
                     schema_name: None,
                     table_name: None,
-                    col_name: "col1".into()
-                })]
+                    col_name: "__otter_temp_col_2".into()
+                })],
+                last_alias: Some("__otter_temp_col_2".into()),
+                last_expr: (
+                    Expr::ColumnRef(ColumnRef {
+                        schema_name: None,
+                        table_name: None,
+                        col_name: "__otter_temp_col_2".into()
+                    }),
+                    "__otter_temp_col_2".into()
+                )
             })
         );
 
         assert_eq!(
-            codegen_expr_wrapper(parse_expr("some_func(col1, 1, 'abc')")),
+            codegen_expr_wrapper_no_agg(parse_expr("some_func(col1, 1, 'abc')")),
             Ok(Expr::Function {
                 name: "some_func".into(),
                 args: vec![
@@ -2253,10 +2370,28 @@ mod expr_codegen_tests {
         );
 
         assert_eq!(
-            codegen_expr_wrapper(parse_expr("COUNT(*)")),
-            Ok(Expr::Function {
-                name: "COUNT".into(),
-                args: vec![Expr::Wildcard]
+            codegen_expr_wrapper_agg(parse_expr("COUNT(*)")),
+            Ok(IntermediateExprAgg {
+                pre_agg: vec![(Expr::Wildcard, "__otter_temp_col_1".into())],
+                agg: vec![(
+                    AggregateFunction::Count,
+                    "__otter_temp_col_1".into(),
+                    "__otter_temp_col_2".into()
+                )],
+                post_agg: vec![Expr::ColumnRef(ColumnRef {
+                    schema_name: None,
+                    table_name: None,
+                    col_name: "__otter_temp_col_2".into()
+                })],
+                last_alias: Some("__otter_temp_col_2".into()),
+                last_expr: (
+                    Expr::ColumnRef(ColumnRef {
+                        schema_name: None,
+                        table_name: None,
+                        col_name: "__otter_temp_col_2".into()
+                    }),
+                    "__otter_temp_col_2".into()
+                )
             })
         );
     }
@@ -2278,7 +2413,7 @@ mod expr_eval_tests {
         value::{Value, ValueBinaryOpError, ValueUnaryOpError},
     };
 
-    use super::{codegen_expr, CodegenContext};
+    use super::{codegen_expr, CodegenContext, IntermediateExpr};
 
     fn str_to_expr(s: &str) -> Expr {
         let dialect = GenericDialect {};
@@ -2286,7 +2421,10 @@ mod expr_eval_tests {
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(tokens, &dialect);
         let mut ctx = CodegenContext::new();
-        codegen_expr(parser.parse_expr().unwrap(), &mut ctx).unwrap()
+        match codegen_expr(parser.parse_expr().unwrap(), &mut ctx).unwrap() {
+            IntermediateExpr::NonAgg(expr) => expr,
+            IntermediateExpr::Agg(_) => panic!("Did not expect aggregate expression here"),
+        }
     }
 
     fn exec_expr_no_context(expr: Expr) -> Result<Value, ExprExecError> {
