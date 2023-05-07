@@ -342,40 +342,30 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                     // evaluated as `Project (col * col)` into `%2` and then apply the group by on
                     // `%2`.
                     let pre_grouped_reg_index = table_reg_index;
+                    let mut pre_grouped_inter_reg_index = pre_grouped_reg_index;
                     // let mut agg_intermediate_cols = Vec::new();
                     // if !select.projection.is_empty() {
                     if !inter_exprs.is_empty() {
-                        let grouped_reg_index = ctx.get_and_increment_reg();
+                        pre_grouped_inter_reg_index = ctx.get_and_increment_reg();
                         ctx.instrs.push(Instruction::Empty {
-                            index: grouped_reg_index,
+                            index: pre_grouped_inter_reg_index,
                         });
 
-                        table_reg_index = grouped_reg_index;
+                        table_reg_index = pre_grouped_inter_reg_index;
 
-                        for (projection, inter_expr) in
-                            select.projection.iter().zip(inter_exprs.iter())
-                        {
+                        for inter_expr in inter_exprs.iter() {
                             match inter_expr {
                                 IntermediateExpr::Agg(agg) => {
                                     for (expr, projected_col_name) in agg.pre_agg.clone() {
                                         ctx.instrs.push(Instruction::Project {
                                             input: pre_grouped_reg_index,
-                                            output: grouped_reg_index,
+                                            output: pre_grouped_inter_reg_index,
                                             expr,
                                             alias: Some(projected_col_name),
                                         });
                                     }
                                 }
-                                IntermediateExpr::NonAgg(expr) => {
-                                    let alias = extract_alias_from_project(&projection)?;
-                                    let projection = Instruction::Project {
-                                        input: pre_grouped_reg_index,
-                                        output: grouped_reg_index,
-                                        expr: expr.clone(),
-                                        alias,
-                                    };
-                                    ctx.instrs.push(projection)
-                                }
+                                IntermediateExpr::NonAgg(_) => {}
                             }
                         }
                     }
@@ -431,7 +421,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                                 }
                             }
 
-                            let original_table_reg_index = table_reg_index;
+                            let last_grouped_reg_index = table_reg_index;
                             table_reg_index = ctx.get_and_increment_reg();
 
                             ctx.instrs.push(Instruction::Empty {
@@ -447,14 +437,43 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                                     IntermediateExpr::Agg(agg) => {
                                         for expr in agg.post_agg.clone() {
                                             ctx.instrs.push(Instruction::Project {
-                                                input: original_table_reg_index,
+                                                input: last_grouped_reg_index,
                                                 output: table_reg_index,
                                                 expr,
                                                 alias,
                                             })
                                         }
                                     }
-                                    IntermediateExpr::NonAgg(_) => {}
+                                    IntermediateExpr::NonAgg(expr) => {
+                                        let alias = extract_alias_from_project(&projection)?;
+                                        let projection = Instruction::Project {
+                                            input: pre_grouped_inter_reg_index,
+                                            output: table_reg_index,
+                                            expr: expr.clone(),
+                                            alias,
+                                        };
+                                        ctx.instrs.push(projection)
+                                    }
+                                }
+                            }
+                        } else {
+                            for (projection, inter_expr) in
+                                select.projection.iter().zip(inter_exprs.iter())
+                            {
+                                match inter_expr {
+                                    IntermediateExpr::NonAgg(expr) => {
+                                        let alias = extract_alias_from_project(&projection)?;
+                                        let projection = Instruction::Project {
+                                            input: pre_grouped_inter_reg_index,
+                                            output: table_reg_index,
+                                            expr: expr.clone(),
+                                            alias,
+                                        };
+                                        ctx.instrs.push(projection)
+                                    }
+                                    IntermediateExpr::Agg(_) => {
+                                        unreachable!("already checked for aggregates")
+                                    }
                                 }
                             }
                         }
