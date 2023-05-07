@@ -81,10 +81,6 @@ impl CodegenContext {
         reg
     }
 
-    pub fn last_used_reg(&self) -> RegisterIndex {
-        self.current_reg
-    }
-
     pub fn get_new_temp_col(&mut self) -> BoundedString {
         self.last_temp_col_num += 1;
         format!("{TEMP_COL_NAME_PREFIX}_{}", self.last_temp_col_num)
@@ -105,14 +101,6 @@ static AGGREGATE_FUNCTIONS: Set<&'static str> = phf_set! {
     "min",
     "sum",
 };
-
-fn extract_expr_ast_from_project(projection: SelectItem) -> Option<ast::Expr> {
-    match projection {
-        SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => Some(expr),
-        SelectItem::QualifiedWildcard(_) => None,
-        SelectItem::Wildcard => None,
-    }
-}
 
 fn extract_alias_from_project(
     projection: &SelectItem,
@@ -470,134 +458,14 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                                 }
                             }
                         }
+
+                        if select.distinct {
+                            return Err(CodegenError::UnsupportedStatementForm(
+                                "DISTINCT is not supported yet",
+                                select.to_string(),
+                            ));
+                        }
                     }
-
-                    // // if there are groupby + aggregations, we project all operations within an
-                    // // aggregation to another table first. for example, `SUM(col * col)` would be
-                    // // evaluated as `Project (col * col)` into `%2` and then apply the group by on
-                    // // `%2`.
-                    // // TODO: possible idea for refactor: make an intermediate representation of
-                    // // Projection that separates non-agg and agg projections.
-                    // let pre_grouped_reg_index = table_reg_index;
-                    // let mut agg_intermediate_cols = Vec::new();
-                    // if !select.projection.is_empty() {
-                    //     let grouped_reg_index = ctx.get_and_increment_reg();
-                    //     ctx.instrs.push(Instruction::Empty {
-                    //         index: grouped_reg_index,
-                    //     });
-
-                    //     table_reg_index = grouped_reg_index;
-
-                    //     for projection in &select.projection {
-                    //         let alias = extract_alias_from_project(&projection)?;
-
-                    //         let expr_ast = extract_expr_ast_from_project(projection.clone());
-
-                    //         match expr_ast {
-                    //             // an aggregate operation
-                    //             Some(expr_ast) if is_expr_agg(&expr_ast) => match expr_ast {
-                    //                 ast::Expr::Function(ref f) => {
-                    //                     let expr = codegen_fn_arg(&expr_ast, &f.args[0], &mut ctx)?;
-                    //                     let projected_col_name = ctx.get_new_temp_col();
-                    //                     agg_intermediate_cols.push(projected_col_name);
-                    //                     ctx.instrs.push(Instruction::Project {
-                    //                         input: pre_grouped_reg_index,
-                    //                         output: grouped_reg_index,
-                    //                         expr,
-                    //                         alias: Some(projected_col_name),
-                    //                     });
-                    //                 }
-                    //                 _ => {}
-                    //             },
-                    //             // a non-aggregate operation
-                    //             _ => {
-                    //                 let expr = match projection {
-                    //                     SelectItem::UnnamedExpr(ref expr) => {
-                    //                         codegen_expr(expr.clone(), &mut ctx)?
-                    //                     }
-                    //                     SelectItem::ExprWithAlias { ref expr, .. } => {
-                    //                         codegen_expr(expr.clone(), &mut ctx)?
-                    //                     }
-                    //                     SelectItem::QualifiedWildcard(_) => Expr::Wildcard,
-                    //                     SelectItem::Wildcard => Expr::Wildcard,
-                    //                 };
-                    //                 let projection = Instruction::Project {
-                    //                     input: pre_grouped_reg_index,
-                    //                     output: grouped_reg_index,
-                    //                     expr,
-                    //                     alias,
-                    //                 };
-                    //                 ctx.instrs.push(projection)
-                    //             }
-                    //         }
-                    //     }
-                    // }
-
-                    // for group_by in select.group_by.clone() {
-                    //     let group_by = codegen_expr(group_by, &mut ctx)?;
-                    //     let grouped_reg_index = ctx.get_and_increment_reg();
-                    //     ctx.instrs.push(Instruction::Empty {
-                    //         index: grouped_reg_index,
-                    //     });
-                    //     ctx.instrs.push(Instruction::GroupBy {
-                    //         input: table_reg_index,
-                    //         output: grouped_reg_index,
-                    //         expr: group_by,
-                    //     });
-                    //     table_reg_index = grouped_reg_index
-                    // }
-
-                    // // this is only for aggregations.
-                    // // aggs are applied on the grouped table created by the `GroupBy` instructions
-                    // // generated above.
-                    // if !select.projection.is_empty() {
-                    //     let has_aggs = select.projection.iter().any(|p| is_projection_agg(p));
-
-                    //     if has_aggs {
-                    //         let original_table_reg_index = table_reg_index;
-                    //         table_reg_index = ctx.get_and_increment_reg();
-
-                    //         ctx.instrs.push(Instruction::Empty {
-                    //             index: table_reg_index,
-                    //         });
-
-                    //         let mut agg_index = 0;
-                    //         for projection in &select.projection {
-                    //             let alias = extract_alias_from_project(&projection)?;
-
-                    //             let expr_ast = extract_expr_ast_from_project(projection.clone());
-
-                    //             match expr_ast {
-                    //                 // an aggregate operation
-                    //                 Some(expr_ast) if is_expr_agg(&expr_ast) => match expr_ast {
-                    //                     ast::Expr::Function(ref f) => {
-                    //                         ctx.instrs.push(Instruction::Aggregate {
-                    //                             input: original_table_reg_index,
-                    //                             output: table_reg_index,
-                    //                             func: AggregateFunction::from_name(
-                    //                                 f.name.to_string().to_lowercase().as_str(),
-                    //                             )?,
-                    //                             col_name: agg_intermediate_cols[agg_index],
-                    //                             alias,
-                    //                         });
-                    //                         agg_index += 1;
-                    //                     }
-                    //                     _ => unreachable!(
-                    //                         "check for fn is already done. this should not happen."
-                    //                     ),
-                    //                 },
-                    //                 _ => {}
-                    //             }
-                    //         }
-                    //     }
-
-                    //     if select.distinct {
-                    //         return Err(CodegenError::UnsupportedStatementForm(
-                    //             "DISTINCT is not supported yet",
-                    //             select.to_string(),
-                    //         ));
-                    //     }
-                    // }
 
                     if let Some(expr_ast) = select.having.clone() {
                         let expr = codegen_expr(expr_ast.clone(), &mut ctx)?.get_non_agg(
@@ -1071,22 +939,6 @@ fn codegen_expr(
 
 fn is_fn_name_aggregate(fn_name: &str) -> bool {
     AGGREGATE_FUNCTIONS.contains(fn_name)
-}
-
-fn is_expr_agg(e: &ast::Expr) -> bool {
-    match e {
-        ast::Expr::Function(ref f) => is_fn_name_aggregate(&f.name.to_string().to_lowercase()),
-        _ => false,
-    }
-}
-
-fn is_projection_agg(p: &SelectItem) -> bool {
-    match p {
-        SelectItem::UnnamedExpr(ref expr) => is_expr_agg(expr),
-        SelectItem::ExprWithAlias { ref expr, .. } => is_expr_agg(expr),
-        SelectItem::QualifiedWildcard(_) => false,
-        SelectItem::Wildcard => false,
-    }
 }
 
 fn codegen_fn_arg(
@@ -2227,7 +2079,7 @@ mod expr_codegen_tests {
             let mut ctx = CodegenContext::new();
             match codegen_expr(expr_ast, &mut ctx)? {
                 IntermediateExpr::Agg(agg) => Ok(agg),
-                IntermediateExpr::NonAgg(expr) => panic!("Expected aggregated expression"),
+                IntermediateExpr::NonAgg(_) => panic!("Expected aggregated expression"),
             }
         }
 
