@@ -13,8 +13,8 @@ use crate::codegen::{codegen_ast, CodegenError};
 use crate::column::Column;
 use crate::expr::eval::ExprExecError;
 use crate::expr::Expr;
-use crate::ic::{Instruction, IntermediateCode};
 use crate::identifier::{ColumnRef, TableRef};
+use crate::ir::{Instruction, IntermediateCode};
 use crate::parser::parse;
 use crate::schema::Schema;
 use crate::table::{Row, RowShared, Table};
@@ -133,10 +133,6 @@ impl VirtualMachine {
     fn execute_instr(&mut self, instr: &Instruction) -> Result<Option<Table>, RuntimeError> {
         let _ = &self.database;
         match instr {
-            Instruction::Value { index, value } => {
-                self.registers
-                    .insert(*index, Register::Value(value.clone()));
-            }
             Instruction::Expr { index, expr } => {
                 self.registers.insert(*index, Register::Expr(expr.clone()));
             }
@@ -328,7 +324,18 @@ impl VirtualMachine {
                     return Err(RuntimeError::RegisterNotATable("project", reg.clone()))
                 }
             },
-            Instruction::GroupBy { index: _, expr: _ } => todo!("group by is not implemented yet"),
+            Instruction::Aggregate {
+                input: _,
+                output: _,
+                func: _,
+                col_name: _,
+                alias: _,
+            } => todo!("aggregate is not implemented yet"),
+            Instruction::GroupBy {
+                input: _,
+                output: _,
+                expr: _,
+            } => todo!("group by is not implemented yet"),
             Instruction::Order {
                 index,
                 expr,
