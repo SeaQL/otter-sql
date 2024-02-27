@@ -342,15 +342,14 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                     // evaluated as `Project (col * col)` into `%2` and then apply the group by on
                     // `%2`.
                     let pre_grouped_reg_index = table_reg_index;
-                    // let mut agg_intermediate_cols = Vec::new();
                     // if !select.projection.is_empty() {
                     if !inter_exprs.is_empty() {
-                        let grouped_reg_index = ctx.get_and_increment_reg();
+                        let pregrouped_inter_reg_index = ctx.get_and_increment_reg();
                         ctx.instrs.push(Instruction::Empty {
-                            index: grouped_reg_index,
+                            index: pregrouped_inter_reg_index,
                         });
 
-                        table_reg_index = grouped_reg_index;
+                        table_reg_index = pregrouped_inter_reg_index;
 
                         for (projection, inter_expr) in
                             select.projection.iter().zip(inter_exprs.iter())
@@ -360,7 +359,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                                     for (expr, projected_col_name) in agg.pre_agg.clone() {
                                         ctx.instrs.push(Instruction::Project {
                                             input: pre_grouped_reg_index,
-                                            output: grouped_reg_index,
+                                            output: pregrouped_inter_reg_index,
                                             expr,
                                             alias: Some(projected_col_name),
                                         });
@@ -370,7 +369,7 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                                     let alias = extract_alias_from_project(&projection)?;
                                     let projection = Instruction::Project {
                                         input: pre_grouped_reg_index,
-                                        output: grouped_reg_index,
+                                        output: pregrouped_inter_reg_index,
                                         expr: expr.clone(),
                                         alias,
                                     };
@@ -380,7 +379,12 @@ pub fn codegen_ast(ast: &Statement) -> Result<IntermediateCode, CodegenError> {
                         }
                     }
 
+                    let mut pre_grouped_reg_index = None;
                     for group_by_ast in select.group_by.clone() {
+                        if let None = pre_grouped_reg_index {
+                            pre_grouped_reg_index = Some(table_reg_index);
+                        }
+
                         let group_by = codegen_expr(group_by_ast.clone(), &mut ctx)?.get_non_agg(
                             "Aggregate expressions are not supported in the GROUP BY clause",
                             group_by_ast,
